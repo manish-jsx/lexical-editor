@@ -1,0 +1,202 @@
+# Basic Usage
+
+This guide covers the basic usage of Lexical Editor Easy in your React application.
+
+## Simple Editor
+
+Here's how to add a basic editor to your component:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function MyEditor() {
+  return (
+    <div>
+      <LexicalEditor 
+        placeholder="Start typing here..." 
+      />
+    </div>
+  );
+}
+
+export default MyEditor;
+```
+
+## Capturing Editor Content
+
+To access the editor content, use the `onChange` prop:
+
+```jsx
+import React, { useState } from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function MyEditor() {
+  const [content, setContent] = useState(null);
+
+  const handleEditorChange = (editorState) => {
+    // Store the editor state
+    setContent(editorState);
+    
+    // You can also convert it to JSON for storage
+    const jsonContent = JSON.stringify(editorState);
+    console.log(jsonContent);
+  };
+
+  return (
+    <div>
+      <LexicalEditor 
+        placeholder="Start typing here..." 
+        onChange={handleEditorChange}
+      />
+      
+      <button onClick={() => console.log(content)}>
+        Log Current Content
+      </button>
+    </div>
+  );
+}
+```
+
+## Editor with Toolbar
+
+Add a toolbar to your editor for formatting options:
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar } from 'lexical-editor-easy';
+
+function MyEditorWithToolbar() {
+  return (
+    <div>
+      <LexicalEditor 
+        placeholder="Start typing here..."
+      >
+        {/* The toolbar is automatically connected to the editor */}
+        <EditorToolbar />
+      </LexicalEditor>
+    </div>
+  );
+}
+```
+
+## Initializing with Content
+
+You can initialize the editor with existing content:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function MyEditorWithContent() {
+  // This could be loaded from your database or API
+  const savedContent = `{
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Hello, this is pre-loaded content!",
+              "type": "text",
+              "version": 1
+            }
+          ],
+          "direction": "ltr",
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1
+        }
+      ],
+      "direction": "ltr",
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1
+    }
+  }`;
+
+  return (
+    <div>
+      <LexicalEditor 
+        initialState={savedContent}
+        placeholder="Start typing here..." 
+      />
+    </div>
+  );
+}
+```
+
+## Styling the Editor
+
+You can customize the look of your editor by adding your own CSS:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+import './my-editor-styles.css';
+
+function MyStyledEditor() {
+  return (
+    <div className="my-custom-editor-wrapper">
+      <LexicalEditor 
+        placeholder="Start typing here..."
+        className="my-custom-editor" 
+      />
+    </div>
+  );
+}
+```
+
+Example CSS (`my-editor-styles.css`):
+
+```css
+.my-custom-editor-wrapper {
+  border: 2px solid #4a5568;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.my-custom-editor {
+  min-height: 200px;
+}
+
+/* Target the editor content area */
+.my-custom-editor .editor-input {
+  padding: 16px;
+  font-family: 'Georgia', serif;
+  font-size: 18px;
+}
+
+/* Target the toolbar */
+.my-custom-editor .editor-toolbar {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px;
+}
+
+/* Target the buttons in the toolbar */
+.my-custom-editor .editor-toolbar button {
+  margin-right: 8px;
+  padding: 6px 10px;
+  background: #edf2f7;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.my-custom-editor .editor-toolbar button.active {
+  background: #4299e1;
+  color: white;
+}
+```
+
+## Next Steps
+
+- Explore [Configuration Options](/getting-started/configuration)
+- Learn about [Vercel Blob integration](/integration/vercel-blob) for image uploads
+- Set up [Neon PostgreSQL integration](/integration/neon-postgres) for persistence

@@ -1,0 +1,168 @@
+# Image Handling
+
+Lexical Editor Easy makes it simple to add images to your content using Vercel Blob Storage.
+
+## Image Upload Components
+
+The library provides the `BlobImageUploader` component that you can add to your editor toolbar:
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar, BlobImageUploader } from 'lexical-editor-easy';
+
+function EditorWithImageUpload() {
+  return (
+    <LexicalEditor>
+      <EditorToolbar>
+        {/* Add image upload functionality to the toolbar */}
+        <BlobImageUploader buttonText="Add Image" />
+      </EditorToolbar>
+    </LexicalEditor>
+  );
+}
+```
+
+## How Image Uploading Works
+
+When you click the image upload button:
+
+1. A file selection dialog opens, allowing you to choose an image file
+2. The selected image is uploaded to Vercel Blob Storage
+3. During upload, a progress indicator shows the upload status
+4. Once uploaded, the image is inserted into the editor at the current cursor position
+5. The image is stored in your Vercel Blob Storage and can be accessed via its URL
+
+## API Route Setup
+
+To enable image uploads, you need to set up an API route in your project:
+
+```jsx
+// /api/upload-blob.js (or .ts)
+import { put } from '@vercel/blob';
+import { v4 as uuidv4 } from 'uuid';
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const file = req.body;
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    // Generate a unique filename to prevent collisions
+    const uniqueFilename = `${uuidv4()}-${file.name}`;
+    
+    const blob = await put(uniqueFilename, file, {
+      access: 'public',
+    });
+
+    return res.status(200).json(blob);
+  } catch (error) {
+    console.error('Error uploading to blob:', error);
+    return res.status(500).json({ error: 'Error uploading file' });
+  }
+}
+```
+
+## Environment Variables
+
+Make sure to set up the necessary environment variables for Vercel Blob:
+
+```
+BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
+```
+
+## Custom Upload Configuration
+
+You can customize the upload process using the `uploadToVercelBlob` function:
+
+```jsx
+import { uploadToVercelBlob } from 'lexical-editor-easy';
+
+// Later in your code
+const handleFileUpload = async (file) => {
+  try {
+    const response = await uploadToVercelBlob(file, {
+      access: 'public', // or 'private'
+      folder: 'blog-images', // organize files in folders
+      altText: 'My image description', // add alt text for accessibility
+      onUploadProgress: (progress) => {
+        console.log(`Upload progress: ${progress * 100}%`);
+      }
+    });
+    
+    if (response.success) {
+      console.log('Image URL:', response.url);
+    }
+  } catch (error) {
+    console.error('Upload failed:', error);
+  }
+};
+```
+
+## Image Optimization
+
+When using Vercel Blob, you automatically get image optimization features:
+
+- Automatic WebP conversion for modern browsers
+- Proper caching headers
+- Support for resizing and cropping via URL parameters
+
+Example of using image optimization parameters:
+
+```
+https://your-blob-url.public.blob.vercel-storage.com/image.jpg?width=800&height=600&fit=crop
+```
+
+## Image Security
+
+If you need to secure your images, you can set the access level to 'private' when uploading:
+
+```jsx
+const response = await uploadToVercelBlob(file, {
+  access: 'private',
+});
+```
+
+Private images will require authentication to access, and their URLs will expire after a certain period.
+
+## Advanced: Custom Image Component
+
+If you need more control over how images are rendered in the editor, you can create a custom image component:
+
+```jsx
+import React from 'react';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+
+function CustomImageComponent() {
+  const [editor] = useLexicalComposerContext();
+  
+  const insertImage = (url, altText) => {
+    editor.update(() => {
+      // Custom code to insert an image at the current selection
+    });
+  };
+  
+  return (
+    <button onClick={() => insertImage('https://example.com/image.jpg', 'Example Image')}>
+      Insert Custom Image
+    </button>
+  );
+}
+```
+
+## Best Practices
+
+1. **Validate Files**: Add file validation to ensure only appropriate images are uploaded
+2. **Optimize Before Upload**: Consider compressing images before upload to save bandwidth
+3. **Alt Text**: Always provide alt text for accessibility
+4. **Error Handling**: Implement proper error handling for failed uploads
+
+## Next Steps
+
+- Learn how to [configure Vercel Blob integration](/integration/vercel-blob) in detail
+- Explore the [API reference for BlobImageUploader](/api-reference/blob-image-uploader)
+- Check out the [Simple Blog Editor tutorial](/tutorials/simple-blog-editor) for a complete example

@@ -1,0 +1,785 @@
+# Integrating with a CMS
+
+In this tutorial, we'll show you how to integrate the Lexical Editor with a headless CMS, using a custom API for content persistence.
+
+## Introduction
+
+Modern content management often involves decoupling the CMS backend from the frontend display. Lexical Editor Easy can be integrated with any headless CMS that provides a content API. We'll demonstrate this using a generic REST API approach that you can adapt to your specific CMS.
+
+## Prerequisites
+
+- A React application set up
+- Access to a headless CMS or API endpoint
+- Basic understanding of async operations in JavaScript
+
+## Installation
+
+First, install Lexical Editor Easy and its dependencies:
+
+```bash
+npm install lexical-editor-easy lexical @lexical/react react react-dom axios
+```
+
+## Setting up the CMS Connector
+
+Create a service to connect to your CMS:
+
+```jsx
+// src/services/cmsService.js
+import axios from 'axios';
+
+const API_URL = 'https://your-cms-api-endpoint.com/api';
+const API_KEY = 'your-cms-api-key'; // Store this securely
+
+export const cmsService = {
+  // Fetch a single content item by ID
+  async getContent(contentId) {
+    try {
+      const response = await axios.get(`${API_URL}/content/${contentId}`, {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching content:', error);
+      throw error;
+    }
+  },
+
+  // Save or update content
+  async saveContent(contentId, data) {
+    try {
+      const response = await axios({
+        method: contentId ? 'PUT' : 'POST',
+        url: contentId ? `${API_URL}/content/${contentId}` : `${API_URL}/content`,
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        data: {
+          content: data.content,
+          title: data.title,
+          status: data.status || 'draft',
+          // Add other metadata as required by your CMS
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error saving content:', error);
+      throw error;
+    }
+  },
+  
+  // List content items
+  async listContent(page = 1, limit = 20) {
+    try {
+      const response = await axios.get(`${API_URL}/content`, {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        params: {
+          page,
+          limit
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error listing content:', error);
+      throw error;
+    }
+  }
+};
+```
+
+## Creating the CMS Editor Component
+
+Now create a component that uses the Lexical Editor with your CMS service:
+
+```jsx
+// src/components/CMSEditor.jsx
+import React, { useState, useEffect } from 'react';
+import { LexicalEditor, EditorToolbar, BlobImageUploader } from 'lexical-editor-easy';
+import { cmsService } from '../services/cmsService';
+import './CMSEditor.css';
+
+export default function CMSEditor({ contentId }) {
+  const [initialContent, setInitialContent] = useState(null);
+  const [title, setTitle] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [status, setStatus] = useState('draft');
+  
+  // Load content from CMS when component mounts or contentId changes
+  useEffect(() => {
+    if (contentId) {
+      const loadContent = async () => {
+        try {
+          const content = await cmsService.getContent(contentId);
+          setInitialContent(content.editorState);
+          setTitle(content.title || '');
+          setStatus(content.status || 'draft');
+        } catch (error) {
+          console.error('Failed to load content:', error);
+          setSaveStatus('Error loading content');
+        }
+      };
+      
+      loadContent();
+    }
+  }, [contentId]);
+  
+  // Handle editor content change and save
+  const handleContentChange = async (editorState) => {
+    // Only save if content has been loaded
+    if (initialContent === null) return;
+    
+    setIsSaving(true);
+    setSaveStatus('Saving...');
+    
+    try {
+      const result = await cmsService.saveContent(contentId, {
+        content: JSON.stringify(editorState),
+        title,
+        status
+      });
+      
+      setSaveStatus('Saved successfully');
+      // If this is a new content, we might want to update the URL with new ID
+      if (!contentId && result.id) {
+        window.history.pushState({}, '', `/editor/${result.id}`);
+      }
+    } catch (error) {
+      setSaveStatus('Error saving content');
+    } finally {
+      setIsSaving(false);
+      // Clear save status after a delay
+      setTimeout(() => setSaveStatus(''), 3000);
+    }
+  };
+  
+  // Handle content publish
+  const handlePublish = async () => {
+    setIsSaving(true);
+    setSaveStatus('Publishing...');
+    
+    try {
+      await cmsService.saveContent(contentId, {
+        content: initialContent,
+        title,
+        status: 'published'
+      });
+      
+      setStatus('published');
+      setSaveStatus('Published successfully');
+    } catch (error) {
+      setSaveStatus('Error publishing content');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSaveStatus(''), 3000);
+    }
+  };
+  
+  return (
+    <div className="cms-editor">
+      <div className="cms-editor-header">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Enter title..."
+          className="cms-editor-title"
+        />
+        
+        <div className="cms-editor-actions">
+          <span className="cms-editor-status">
+            Status: {status === 'draft' ? '🔵 Draft' : '🟢 Published'}
+          </span>
+          
+          <button 
+            onClick={handlePublish}
+            disabled={isSaving || status === 'published'}
+            className="publish-button"
+          >
+            {status === 'published' ? 'Published' : 'Publish'}
+          </button>
+          
+          {saveStatus && (
+            <span className="save-status">{saveStatus}</span>
+          )}
+        </div>
+      </div>
+      
+      <LexicalEditor
+        initialState={initialContent}
+        onChange={handleContentChange}
+        placeholder="Start writing your content..."
+      >
+        <EditorToolbar>
+          <BlobImageUploader buttonText="Insert Image" />
+        </EditorToolbar>
+      </LexicalEditor>
+    </div>
+  );
+}
+```
+
+## Adding Styles for the CMS Editor
+
+Create a CSS file for styling:
+
+```css
+/* src/components/CMSEditor.css */
+.cms-editor {
+  display: flex;
+  flex-direction: column;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.cms-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.cms-editor-title {
+  font-size: 24px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  flex: 1;
+  min-width: 200px;
+  margin-right: 15px;
+}
+
+.cms-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.cms-editor-status {
+  font-size: 14px;
+  color: #4a5568;
+}
+
+.publish-button {
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.publish-button:hover {
+  background-color: #3182ce;
+}
+
+.publish-button:disabled {
+  background-color: #cbd5e0;
+  cursor: not-allowed;
+}
+
+.save-status {
+  font-size: 14px;
+  color: #4a5568;
+  animation: fadeOut 3s forwards;
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+```
+
+## Content List Component
+
+Let's create a component to list and manage content from the CMS:
+
+```jsx
+// src/components/ContentList.jsx
+import React, { useState, useEffect } from 'react';
+import { cmsService } from '../services/cmsService';
+import './ContentList.css';
+
+export default function ContentList({ onSelectContent }) {
+  const [contents, setContents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  
+  const loadContents = async (pageNum = 1) => {
+    setIsLoading(true);
+    
+    try {
+      const response = await cmsService.listContent(pageNum);
+      
+      if (pageNum === 1) {
+        setContents(response.items);
+      } else {
+        setContents([...contents, ...response.items]);
+      }
+      
+      setHasMore(response.hasMore);
+      setPage(pageNum);
+    } catch (error) {
+      console.error('Failed to load content list:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    loadContents();
+  }, []);
+  
+  const createNewContent = () => {
+    onSelectContent(null); // null indicates new content
+  };
+  
+  const loadMore = () => {
+    if (!isLoading && hasMore) {
+      loadContents(page + 1);
+    }
+  };
+  
+  return (
+    <div className="content-list">
+      <div className="content-list-header">
+        <h2>Content Items</h2>
+        <button onClick={createNewContent} className="new-content-button">
+          Create New
+        </button>
+      </div>
+      
+      {isLoading && page === 1 ? (
+        <div className="loading-indicator">Loading content...</div>
+      ) : (
+        <>
+          {contents.length === 0 ? (
+            <div className="empty-state">
+              No content found. Create your first content item!
+            </div>
+          ) : (
+            <ul className="content-items">
+              {contents.map(item => (
+                <li key={item.id} className="content-item">
+                  <div className="content-item-details" onClick={() => onSelectContent(item.id)}>
+                    <h3 className="content-title">{item.title || 'Untitled'}</h3>
+                    <div className="content-meta">
+                      <span className={`content-status status-${item.status}`}>
+                        {item.status}
+                      </span>
+                      <span className="content-date">
+                        {new Date(item.updatedAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          
+          {hasMore && (
+            <button 
+              onClick={loadMore} 
+              disabled={isLoading}
+              className="load-more-button"
+            >
+              {isLoading ? 'Loading...' : 'Load More'}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+```
+
+Add the corresponding styles:
+
+```css
+/* src/components/ContentList.css */
+.content-list {
+  padding: 20px;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+.content-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.new-content-button {
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.new-content-button:hover {
+  background-color: #3182ce;
+}
+
+.content-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.content-item {
+  background-color: white;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+}
+
+.content-item:hover {
+  border-color: #4299e1;
+  transform: translateY(-2px);
+}
+
+.content-item-details {
+  padding: 15px;
+  cursor: pointer;
+}
+
+.content-title {
+  margin: 0 0 5px 0;
+  font-size: 18px;
+}
+
+.content-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #718096;
+}
+
+.content-status {
+  font-weight: 500;
+}
+
+.status-draft {
+  color: #3182ce;
+}
+
+.status-published {
+  color: #38a169;
+}
+
+.load-more-button {
+  width: 100%;
+  background-color: #edf2f7;
+  border: 1px solid #e2e8f0;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 15px;
+  cursor: pointer;
+}
+
+.load-more-button:hover {
+  background-color: #e2e8f0;
+}
+
+.load-more-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-indicator, .empty-state {
+  padding: 20px;
+  text-align: center;
+  color: #718096;
+}
+```
+
+## Main App Component
+
+Let's put it all together in an App component:
+
+```jsx
+// src/App.jsx
+import React, { useState } from 'react';
+import ContentList from './components/ContentList';
+import CMSEditor from './components/CMSEditor';
+import './App.css';
+
+function App() {
+  const [selectedContentId, setSelectedContentId] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  
+  const handleSelectContent = (contentId) => {
+    setSelectedContentId(contentId);
+    setIsEditing(true);
+  };
+  
+  const handleBackToList = () => {
+    setIsEditing(false);
+  };
+  
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>CMS Editor Demo</h1>
+      </header>
+      
+      <main className="app-main">
+        {isEditing ? (
+          <div>
+            <button onClick={handleBackToList} className="back-button">
+              ← Back to List
+            </button>
+            <CMSEditor contentId={selectedContentId} />
+          </div>
+        ) : (
+          <ContentList onSelectContent={handleSelectContent} />
+        )}
+      </main>
+      
+      <footer className="app-footer">
+        <p>Powered by lexical-editor-easy</p>
+      </footer>
+    </div>
+  );
+}
+
+export default App;
+```
+
+Final styles for the App:
+
+```css
+/* src/App.css */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background-color: #2d3748;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+.app-main {
+  flex: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  width: 100%;
+}
+
+.app-footer {
+  background-color: #2d3748;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+  margin-top: auto;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #4299e1;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  padding: 0;
+}
+
+.back-button:hover {
+  text-decoration: underline;
+}
+```
+
+## Preview Component
+
+Let's add a preview component to see how the content would look when published:
+
+```jsx
+// src/components/ContentPreview.jsx
+import React, { useState, useEffect } from 'react';
+import { cmsService } from '../services/cmsService';
+import './ContentPreview.css';
+
+export default function ContentPreview({ contentId, onClose }) {
+  const [content, setContent] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const loadContent = async () => {
+      setIsLoading(true);
+      
+      try {
+        const contentData = await cmsService.getContent(contentId);
+        setContent(contentData);
+      } catch (error) {
+        console.error('Failed to load content for preview:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (contentId) {
+      loadContent();
+    }
+  }, [contentId]);
+  
+  if (isLoading) {
+    return (
+      <div className="content-preview loading">
+        <div className="preview-header">
+          <h2>Preview</h2>
+          <button onClick={onClose} className="close-button">✕</button>
+        </div>
+        <div className="preview-loading">Loading preview...</div>
+      </div>
+    );
+  }
+  
+  if (!content) {
+    return (
+      <div className="content-preview error">
+        <div className="preview-header">
+          <h2>Preview</h2>
+          <button onClick={onClose} className="close-button">✕</button>
+        </div>
+        <div className="preview-error">Failed to load content</div>
+      </div>
+    );
+  }
+  
+  // Note: In a real implementation, you would use a proper HTML renderer
+  // for the Lexical JSON content. This is just a placeholder.
+  return (
+    <div className="content-preview">
+      <div className="preview-header">
+        <h2>Preview</h2>
+        <button onClick={onClose} className="close-button">✕</button>
+      </div>
+      
+      <div className="preview-content">
+        <h1 className="preview-title">{content.title}</h1>
+        
+        <div className="preview-body">
+          {/* 
+            In reality, you would render the actual content from Lexical state here.
+            This could involve using a LexicalRichTextPlugin in read-only mode
+            or converting the Lexical state to HTML.
+          */}
+          <div className="preview-placeholder">
+            [Content would be rendered here]
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+Add styles for the preview:
+
+```css
+/* src/components/ContentPreview.css */
+.content-preview {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 60%;
+  max-width: 800px;
+  background-color: white;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.preview-header h2 {
+  margin: 0;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #718096;
+}
+
+.preview-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.preview-title {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 28px;
+}
+
+.preview-loading, .preview-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #718096;
+}
+
+.preview-error {
+  color: #e53e3e;
+}
+
+.preview-placeholder {
+  padding: 40px;
+  border: 2px dashed #e2e8f0;
+  border-radius: 8px;
+  text-align: center;
+  color: #a0aec0;
+}
+```
+
+## Conclusion
+
+You've now created a comprehensive CMS integration with Lexical Editor Easy! This implementation includes:
+
+1. A CMS service for connecting to your API
+2. Content creation and editing with the Lexical Editor
+3. Content listing and management
+4. Publishing workflow
+5. Content preview
+
+You can extend this foundation to include additional features like:
+- User permissions and roles
+- Content versioning
+- Collaborative editing
+- Media library integration
+- SEO metadata
+- Custom content types
+
+Remember to adapt the API connection code to your specific CMS's requirements and authentication methods.

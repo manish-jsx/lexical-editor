@@ -1,0 +1,267 @@
+# Troubleshooting
+
+This guide helps you solve common issues you might encounter when using Lexical Editor Easy.
+
+## Installation Issues
+
+### Package Not Found
+
+**Problem:** `npm install` fails with "package not found" error.
+
+**Solution:**
+
+```bash
+# Make sure you're using the correct package name
+npm install lexical-editor-easy
+
+# If that doesn't work, try clearing npm cache
+npm cache clean --force
+npm install lexical-editor-easy
+```
+
+### Peer Dependencies Missing
+
+**Problem:** Warnings about missing peer dependencies.
+
+**Solution:** Install the required peer dependencies:
+
+```bash
+npm install lexical @lexical/react react react-dom
+```
+
+For specific integrations:
+
+```bash
+# For Vercel Blob support
+npm install @vercel/blob
+
+# For Neon PostgreSQL support
+npm install @neondatabase/serverless
+```
+
+## Editor Loading Issues
+
+### Editor Doesn't Render
+
+**Problem:** The editor doesn't appear on the page.
+
+**Solution:**
+
+1. Check for JavaScript errors in the console
+2. Make sure you're importing the components correctly:
+
+```jsx
+import { LexicalEditor } from 'lexical-editor-easy';
+
+// Not
+import LexicalEditor from 'lexical-editor-easy';
+```
+
+3. Ensure the editor is wrapped in a React component:
+
+```jsx
+function MyComponent() {
+  return (
+    <div>
+      <LexicalEditor />
+    </div>
+  );
+}
+```
+
+### Editor Crashes with Type Errors
+
+**Problem:** TypeScript errors or runtime type errors related to the editor.
+
+**Solution:**
+
+1. Make sure you're using compatible versions of React and Lexical
+2. Check that your TypeScript configuration is correct
+3. Update to the latest version of the package:
+
+```bash
+npm install lexical-editor-easy@latest
+```
+
+## Vercel Blob Integration Issues
+
+### Images Fail to Upload
+
+**Problem:** Images don't upload or return errors.
+
+**Solution:**
+
+1. Check that your API route is properly configured:
+
+```jsx
+// /api/upload-blob.js
+import { put } from '@vercel/blob';
+
+export default async function handler(req, res) {
+  // ...implementation
+}
+```
+
+2. Verify your environment variables are set:
+
+```
+BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
+```
+
+3. Check network requests in your browser's developer tools for specific error messages
+
+4. Ensure your Vercel project has Blob Storage enabled in the dashboard
+
+### "Access Denied" for Uploaded Images
+
+**Problem:** Images upload successfully but can't be viewed.
+
+**Solution:**
+
+1. Make sure you're using public access for images that need to be displayed:
+
+```jsx
+const response = await uploadToVercelBlob(file, {
+  access: 'public',
+});
+```
+
+2. Check your Vercel project settings for Blob Storage permissions
+
+## Neon PostgreSQL Integration Issues
+
+### Database Connection Fails
+
+**Problem:** Can't connect to the Neon database, errors when saving content.
+
+**Solution:**
+
+1. Verify your connection string is correct:
+
+```
+NEON_DATABASE_URL=postgresql://user:password@endpoint.pooler.region.neon.tech/database_name
+```
+
+2. Make sure your Neon database is active and accessible
+
+3. Check if you're trying to connect from a client-side component incorrectly (should use API routes instead)
+
+4. Try enabling WebSockets for the connection:
+
+```jsx
+<NeonPersistencePlugin
+  connectionString={process.env.NEON_DATABASE_URL}
+  useWebsockets={true}
+/>
+```
+
+### Content Not Saving
+
+**Problem:** Content changes aren't saved to the database.
+
+**Solution:**
+
+1. Check for errors in the console
+2. Verify that your `contentId` is consistent across sessions:
+
+```jsx
+<NeonPersistencePlugin
+  connectionString={process.env.NEON_DATABASE_URL}
+  contentId="consistent-id-123" // Use the same ID to update the same document
+/>
+```
+
+3. Try increasing the `saveDelay` to ensure changes are complete before saving:
+
+```jsx
+<NeonPersistencePlugin
+  saveDelay={2000} // 2 seconds
+  // ...other props
+/>
+```
+
+4. Add error handling to see what's going wrong:
+
+```jsx
+<NeonPersistencePlugin
+  // ...other props
+  onError={(error) => console.error('Save error:', error)}
+/>
+```
+
+## Editor Behavior Issues
+
+### Formatting Commands Don't Work
+
+**Problem:** Buttons like bold, italic, etc. don't apply formatting.
+
+**Solution:**
+
+1. Make sure the editor has focus when commands are issued
+2. Check that you're using the built-in `EditorToolbar` or dispatching commands correctly:
+
+```jsx
+import { FORMAT_TEXT_COMMAND } from 'lexical';
+
+// In your command handler:
+editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
+```
+
+### Content Disappears After Reload
+
+**Problem:** Editor content is lost when the page is reloaded.
+
+**Solution:**
+
+1. Implement persistence with the Neon PostgreSQL integration:
+
+```jsx
+<LexicalEditor>
+  <NeonPersistencePlugin
+    connectionString={process.env.NEON_DATABASE_URL}
+    contentId="my-document"
+  />
+</LexicalEditor>
+```
+
+2. Or implement your own persistence mechanism:
+
+```jsx
+function EditorWithLocalStorage() {
+  const [initialContent, setInitialContent] = React.useState(null);
+  
+  // Load saved content on mount
+  React.useEffect(() => {
+    const saved = localStorage.getItem('editorContent');
+    if (saved) {
+      setInitialContent(saved);
+    }
+  }, []);
+  
+  // Save content on change
+  const handleEditorChange = (editorState) => {
+    const content = JSON.stringify(editorState);
+    localStorage.setItem('editorContent', content);
+  };
+  
+  return (
+    <LexicalEditor
+      initialState={initialContent}
+      onChange={handleEditorChange}
+    />
+  );
+}
+```
+
+## Still Having Issues?
+
+If you're still experiencing problems:
+
+1. Check the [GitHub repository](https://github.com/manish-jsx/lexical-editor) for known issues
+2. Search the repository issues to see if others have encountered the same problem
+3. Open a new issue with:
+   - A clear description of the problem
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - Version information for lexical-editor-easy and relevant dependencies
+4. For urgent issues, consider reaching out via the repository's contact channels

@@ -1,0 +1,796 @@
+# Building a Collaborative Editor
+
+In this advanced tutorial, we'll create a collaborative editing experience using Lexical Editor Easy with Yjs and WebSockets. This allows multiple users to edit the same document simultaneously in real-time.
+
+## Introduction
+
+Real-time collaboration is a powerful feature for modern editors. It enables users to work together on the same document, seeing each other's changes instantly. This tutorial demonstrates how to implement collaborative editing using:
+
+- **Lexical Editor Easy**: Our base rich text editor
+- **Yjs**: A CRDT algorithm for conflict-free collaboration
+- **WebSocket**: For real-time communication
+- **Neon PostgreSQL**: For document persistence
+
+## Prerequisites
+
+- Basic understanding of React and Node.js
+- Familiarity with WebSockets
+- A Neon PostgreSQL database
+- Understanding of basic Lexical Editor functionality
+
+## Setting Up the Project
+
+Start by creating a new React application:
+
+```bash
+npx create-react-app collaborative-editor
+cd collaborative-editor
+```
+
+Install the necessary dependencies:
+
+```bash
+npm install lexical-editor-easy lexical @lexical/react @neondatabase/serverless
+npm install yjs y-websocket @lexical/yjs uuid
+npm install express ws cors
+```
+
+## Creating the Backend Service
+
+First, let's create a simple WebSocket server for communication between clients. Create a file called `server.js` in your project root:
+
+```javascript
+// server.js
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const cors = require('cors');
+
+// Create express app and HTTP server
+const app = express();
+app.use(cors());
+const server = http.createServer(app);
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+// Track connected clients
+const clients = new Map();
+
+// Helper function to broadcast messages to all clients except the sender
+function broadcast(message, senderId) {
+  [...clients.entries()].forEach(([clientId, client]) => {
+    if (clientId !== senderId && client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
+// Handle WebSocket connections
+wss.on('connection', (ws, req) => {
+  // Generate client ID
+  const clientId = req.url.split('=')[1] || Date.now().toString();
+  clients.set(clientId, ws);
+  
+  console.log(`Client connected: ${clientId}`);
+  
+  // Handle incoming messages
+  ws.on('message', (message) => {
+    try {
+      // Forward message to all other clients
+      broadcast(message, clientId);
+    } catch (error) {
+      console.error('Error handling message:', error);
+    }
+  });
+  
+  // Handle disconnection
+  ws.on('close', () => {
+    console.log(`Client disconnected: ${clientId}`);
+    clients.delete(clientId);
+  });
+  
+  // Send initial connection confirmation
+  ws.send(JSON.stringify({
+    type: 'connection-established',
+    clientId,
+    connectedClients: clients.size
+  }));
+});
+
+// Start server
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+```
+
+## Creating the Collaborative Plugin
+
+Now, let's create a collaborative plugin for our Lexical Editor. Create a new file at `src/components/CollaborationPlugin.js`:
+
+```jsx
+import React, { useEffect, useState } from 'react';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { createPortal } from 'react-dom';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { CollaborationPlugin as LexicalCollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
+import { v4 as uuidv4 } from 'uuid';
+
+// Generate a random user color
+function getRandomColor() {
+  return `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')}`;
+}
+
+// Generate a random user name
+function getRandomName() {
+  const names = ['User', 'Editor', 'Writer', 'Author', 'Collaborator'];
+  return `${names[Math.floor(Math.random() * names.length)]} ${Math.floor(Math.random() * 1000)}`;
+}
+
+// Component to display user cursors
+function CollaboratorCursor({ color, name, position }) {
+  return position ? (
+    <div
+      className="collaborator-cursor"
+      style={{
+        position: 'absolute',
+        top: position.top,
+        left: position.left,
+        backgroundColor: color,
+        transform: 'translateX(-50%)',
+      }}
+    >
+      <div className="cursor-line" style={{ backgroundColor: color, width: 2, height: 24 }} />
+      <div 
+        className="cursor-name" 
+        style={{ 
+          backgroundColor: color, 
+          color: '#fff', 
+          padding: '2px 6px', 
+          borderRadius: 3, 
+          fontSize: 12 
+        }}
+      >
+        {name}
+      </div>
+    </div>
+  ) : null;
+}
+
+// Component to display connected users
+function UserStatus({ connectedUsers }) {
+  if (!connectedUsers.length) return null;
+  
+  return (
+    <div className="connected-users">
+      <span>Connected users: </span>
+      <div className="user-avatars">
+        {connectedUsers.map((user) => (
+          <div 
+            key={user.clientId} 
+            className="user-avatar"
+            style={{ backgroundColor: user.color }}
+            title={user.name}
+          >
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function CollaborationPlugin({ documentId, userName, websocketUrl }) {
+  const [editor] = useLexicalComposerContext();
+  const [ydoc] = useState(new Y.Doc());
+  const [provider, setProvider] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [connectedUsers, setConnectedUsers] = useState([]);
+  const [clientId] = useState(uuidv4());
+  const [userColor] = useState(getRandomColor());
+  const [userInfo] = useState({
+    clientId,
+    name: userName || getRandomName(),
+    color: userColor,
+  });
+  
+  // Connect to WebSocket server
+  useEffect(() => {
+    if (!documentId) return;
+    
+    const wsProvider = new WebsocketProvider(
+      websocketUrl || 'ws://localhost:4000',
+      `document-${documentId}`,
+      ydoc,
+      { params: { id: clientId } }
+    );
+    
+    // Set up awareness protocol for user presence
+    const awareness = wsProvider.awareness;
+    awareness.setLocalStateField('user', userInfo);
+    
+    wsProvider.on('status', ({ status }) => {
+      setConnected(status === 'connected');
+    });
+    
+    wsProvider.on('sync', () => {
+      console.log('Document synchronized with server');
+    });
+    
+    awareness.on('change', () => {
+      const users = [];
+      awareness.getStates().forEach((state, clientId) => {
+        if (state.user) {
+          users.push({
+            clientId,
+            name: state.user.name,
+            color: state.user.color
+          });
+        }
+      });
+      setConnectedUsers(users);
+    });
+    
+    setProvider(wsProvider);
+    
+    return () => {
+      wsProvider.disconnect();
+    };
+  }, [documentId, ydoc, clientId, userInfo, websocketUrl]);
+  
+  return (
+    <>
+      {provider && (
+        <LexicalCollaborationPlugin
+          id={documentId}
+          providerFactory={() => provider}
+          shouldBootstrap={true}
+          username={userInfo.name}
+          cursorColor={userInfo.color}
+        />
+      )}
+      
+      {connected ? (
+        <div className="collaboration-status connected">
+          <UserStatus connectedUsers={connectedUsers} />
+        </div>
+      ) : (
+        <div className="collaboration-status disconnected">
+          Connecting...
+        </div>
+      )}
+    </>
+  );
+}
+```
+
+## Creating the Collaborative Editor Component
+
+Now, let's create the main collaborative editor component. Create a new file at `src/components/CollaborativeEditor.js`:
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+import { NeonPersistencePlugin } from 'lexical-editor-easy';
+import CollaborationPlugin from './CollaborationPlugin';
+import { initNeonDatabase } from 'lexical-editor-easy';
+import './CollaborativeEditor.css';
+
+export default function CollaborativeEditor({ documentId, userName }) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [neonDb] = useState(() => initNeonDatabase({
+    connectionString: process.env.REACT_APP_NEON_DATABASE_URL,
+    useWebsockets: true
+  }));
+  
+  useEffect(() => {
+    // Set up database table if needed
+    neonDb.setupTables().catch(err => {
+      console.error('Error setting up tables:', err);
+    });
+  }, [neonDb]);
+  
+  // Handler when document is loaded
+  const handleLoad = () => {
+    setIsLoaded(true);
+  };
+  
+  return (
+    <div className="collaborative-editor-container">
+      <div className="editor-header">
+        <h2>Document: {documentId}</h2>
+        <div className="editor-status">
+          {isLoaded ? 'Document loaded' : 'Loading document...'}
+        </div>
+      </div>
+      
+      <div className="editor-content">
+        <LexicalEditor
+          placeholder="Start typing here... Others will see your changes in real-time!"
+          className="collaborative-editor"
+        >
+          {/* Plugin for document persistence */}
+          <NeonPersistencePlugin 
+            connectionString={process.env.REACT_APP_NEON_DATABASE_URL}
+            contentId={documentId}
+            onLoad={handleLoad}
+            saveDelay={2000} // Longer delay for collaborative environments
+          />
+          
+          {/* Plugin for real-time collaboration */}
+          <CollaborationPlugin
+            documentId={documentId}
+            userName={userName}
+            websocketUrl="ws://localhost:4000"
+          />
+        </LexicalEditor>
+      </div>
+    </div>
+  );
+}
+```
+
+## Adding Styling
+
+Create `src/components/CollaborativeEditor.css`:
+
+```css
+.collaborative-editor-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.editor-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.editor-status {
+  font-size: 14px;
+  color: #718096;
+}
+
+.editor-content {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.collaborative-editor {
+  min-height: 400px;
+  position: relative;
+}
+
+.collaboration-status {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10;
+}
+
+.collaboration-status.connected {
+  background-color: #c6f6d5;
+  color: #276749;
+}
+
+.collaboration-status.disconnected {
+  background-color: #fed7d7;
+  color: #c53030;
+}
+
+.connected-users {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatars {
+  display: flex;
+  margin-left: 4px;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  margin-right: -8px;
+  border: 2px solid white;
+}
+
+.collaborator-cursor {
+  pointer-events: none;
+  z-index: 10;
+}
+
+.cursor-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.cursor-name {
+  white-space: nowrap;
+  position: absolute;
+  top: -20px;
+  left: 0;
+  pointer-events: none;
+}
+```
+
+## Main App Component
+
+Update `src/App.js` to include our collaborative editor:
+
+```jsx
+import React, { useState } from 'react';
+import CollaborativeEditor from './components/CollaborativeEditor';
+import { v4 as uuidv4 } from 'uuid';
+import './App.css';
+
+function App() {
+  const [userName, setUserName] = useState('');
+  const [documentId, setDocumentId] = useState('');
+  const [isJoined, setIsJoined] = useState(false);
+  
+  // Join or create a document
+  const handleJoinDocument = (e) => {
+    e.preventDefault();
+    if (documentId.trim() === '') {
+      setDocumentId(uuidv4());
+    }
+    setIsJoined(true);
+  };
+  
+  // Create a new document with a random ID
+  const handleCreateDocument = () => {
+    setDocumentId(uuidv4());
+    setIsJoined(true);
+  };
+  
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Collaborative Editor</h1>
+      </header>
+      
+      <main className="App-content">
+        {!isJoined ? (
+          <div className="join-container">
+            <h2>Join or Create a Document</h2>
+            <form onSubmit={handleJoinDocument} className="join-form">
+              <div className="form-group">
+                <label htmlFor="userName">Your Name</label>
+                <input
+                  type="text"
+                  id="userName"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Enter your name"
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="documentId">Document ID (optional)</label>
+                <input
+                  type="text"
+                  id="documentId"
+                  value={documentId}
+                  onChange={(e) => setDocumentId(e.target.value)}
+                  placeholder="Enter document ID or leave empty to create new"
+                />
+              </div>
+              
+              <div className="form-actions">
+                <button type="button" onClick={handleCreateDocument}>
+                  Create New Document
+                </button>
+                <button type="submit">
+                  Join Document
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <CollaborativeEditor documentId={documentId} userName={userName} />
+        )}
+      </main>
+      
+      <footer className="App-footer">
+        <p>Built with Lexical Editor Easy</p>
+      </footer>
+    </div>
+  );
+}
+
+export default App;
+```
+
+Add some styling in `src/App.css`:
+
+```css
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.App-header {
+  background-color: #2c5282;
+  color: white;
+  padding: 16px;
+  text-align: center;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.App-content {
+  flex: 1;
+  padding: 24px;
+}
+
+.App-footer {
+  background-color: #2c5282;
+  color: white;
+  padding: 16px;
+  text-align: center;
+  margin-top: auto;
+}
+
+.App-footer p {
+  margin: 0;
+}
+
+.join-container {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 24px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.join-container h2 {
+  margin-top: 0;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 500;
+}
+
+.form-group input {
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.form-actions button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.form-actions button[type="submit"] {
+  background-color: #3182ce;
+  color: white;
+}
+
+.form-actions button[type="button"] {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.form-actions button:hover {
+  opacity: 0.9;
+}
+```
+
+## Setting Up Environment Variables
+
+Create a `.env` file in your project root:
+
+```
+REACT_APP_NEON_DATABASE_URL=your_neon_connection_string
+```
+
+## Running the Application
+
+Let's set up the commands to run both the client and the server:
+
+Update your `package.json`:
+
+```json
+{
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "server": "node server.js",
+    "dev": "concurrently \"npm run server\" \"npm run start\""
+  }
+}
+```
+
+Install the concurrently package:
+
+```bash
+npm install concurrently --save-dev
+```
+
+Now you can run the entire application with:
+
+```bash
+npm run dev
+```
+
+## How It Works
+
+Let's break down how the collaborative editing works:
+
+1. **Yjs and CRDT**: Yjs is a conflict-free replicated data type (CRDT) implementation, which allows multiple users to edit the same document simultaneously without conflicts. It handles synchronization between users automatically.
+
+2. **WebSocket Communication**: Changes from each client are transmitted via WebSockets to all other connected clients in real-time.
+
+3. **Lexical Collaboration Plugin**: The Lexical editor has built-in support for collaborative editing via the `CollaborationPlugin`, which we're utilizing with our Yjs setup.
+
+4. **User Awareness**: The collaboration plugin also tracks user cursors and selections, showing each user's current position in the document.
+
+5. **Persistent Storage**: While real-time changes are managed through WebSockets, we're also persisting changes to Neon PostgreSQL for long-term storage.
+
+## Testing the Collaborative Features
+
+To test the collaboration features:
+
+1. Open the application in two different browser windows or devices
+2. Join the same document using the same document ID
+3. Start typing in one window and observe the changes appear in real-time in the other window
+4. Notice how user cursors and selections are visible across different sessions
+
+## Advanced Features to Consider
+
+Here are some ways to enhance your collaborative editor:
+
+### 1. User Authentication
+
+Add authentication to ensure only authorized users can access specific documents:
+
+```jsx
+function AuthenticatedEditor({ user, documentId }) {
+  if (!user) {
+    return <LoginComponent />;
+  }
+  
+  return <CollaborativeEditor documentId={documentId} userName={user.name} />;
+}
+```
+
+### 2. Document History
+
+Track document revision history to allow users to see past versions:
+
+```jsx
+function EditorWithHistory({ documentId }) {
+  const [revisions, setRevisions] = useState([]);
+  const [selectedRevision, setSelectedRevision] = useState(null);
+  
+  // Fetch document revisions on mount
+  useEffect(() => {
+    async function fetchRevisions() {
+      // Implementation to fetch revisions from your backend
+    }
+    fetchRevisions();
+  }, [documentId]);
+  
+  return (
+    <div>
+      <CollaborativeEditor 
+        documentId={documentId} 
+        initialRevision={selectedRevision}
+      />
+      
+      <div className="revision-history">
+        <h3>History</h3>
+        <ul>
+          {revisions.map(rev => (
+            <li key={rev.id} onClick={() => setSelectedRevision(rev.id)}>
+              {rev.date} by {rev.author}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+```
+
+### 3. Comment Threads
+
+Add support for comments within the document:
+
+```jsx
+function CommentPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const [comments, setComments] = useState([]);
+  
+  // Implementation for adding/displaying comments
+  
+  return (
+    <div className="comments-container">
+      {comments.map(comment => (
+        <div key={comment.id} className="comment">
+          <div className="comment-header">
+            <span className="comment-author">{comment.author}</span>
+            <span className="comment-date">{comment.date}</span>
+          </div>
+          <div className="comment-content">{comment.text}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Conclusion
+
+You've now built a collaborative rich text editor with real-time synchronization between multiple users. This implementation combines:
+
+- **Lexical Editor Easy** for the rich text editing capabilities
+- **Yjs** for conflict-free real-time collaboration
+- **WebSockets** for communication between clients
+- **Neon PostgreSQL** for persistent storage
+
+This foundation can be extended with more advanced features like access control, revision history, comments, and more based on your specific requirements.
+
+Real-time collaboration significantly enhances the user experience for document editing applications, making it possible for teams to work together efficiently regardless of their physical locations.

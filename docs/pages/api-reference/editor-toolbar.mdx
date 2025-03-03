@@ -1,0 +1,127 @@
+# EditorToolbar API Reference
+
+The `EditorToolbar` component provides formatting controls for the Lexical Editor.
+
+## Import
+
+```jsx
+import { EditorToolbar } from 'lexical-editor-easy';
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `className` | `string` | `''` | Additional CSS class for the toolbar |
+| `children` | `React.ReactNode` | `undefined` | Additional toolbar items |
+
+## Basic Usage
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar } from 'lexical-editor-easy';
+
+function EditorWithToolbar() {
+  return (
+    <LexicalEditor placeholder="Start typing here...">
+      <EditorToolbar />
+    </LexicalEditor>
+  );
+}
+```
+
+## Adding Custom Items to the Toolbar
+
+You can extend the toolbar with custom components:
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar, BlobImageUploader } from 'lexical-editor-easy';
+
+function EditorWithCustomToolbar() {
+  return (
+    <LexicalEditor placeholder="Start typing here...">
+      <EditorToolbar>
+        {/* Add custom toolbar items */}
+        <BlobImageUploader buttonText="Add Image" />
+        
+        {/* Custom button */}
+        <button 
+          onClick={() => {
+            // Custom action, e.g., save the document
+            console.log('Custom action');
+          }}
+          className="toolbar-custom-button"
+        >
+          Save
+        </button>
+      </EditorToolbar>
+    </LexicalEditor>
+  );
+}
+```
+
+## Styling the Toolbar
+
+You can style the toolbar using the `className` prop:
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar } from 'lexical-editor-easy';
+import './toolbar-styles.css';
+
+function StyledToolbarEditor() {
+  return (
+    <LexicalEditor placeholder="Start typing here...">
+      <EditorToolbar className="my-custom-toolbar" />
+    </LexicalEditor>
+  );
+}
+```
+
+Example CSS (`toolbar-styles.css`):
+
+```css
+.my-custom-toolbar {
+  background-color: #2d3748;
+  border-radius: 8px 8px 0 0;
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.my-custom-toolbar button {
+  background-color: transparent;
+  color: white;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  margin-right: 6px;
+  padding: 4px 8px;
+}
+
+.my-custom-toolbar button:hover {
+  background-color: #4a5568;
+}
+
+.my-custom-toolbar button.active {
+  background-color: #4299e1;
+  border-color: #4299e1;
+}
+```
+
+## Default Toolbar Features
+
+The toolbar provides these formatting options by default:
+
+- **Text Formatting**: Bold, Italic, Underline
+- **Additional options can be added through custom components**
+
+## Working with the Toolbar
+
+The toolbar automatically connects to the parent `LexicalEditor` component using React context, so you don't need to manually connect them.
+
+## Notes
+
+- The toolbar must be used within a `LexicalEditor` component
+- You can have only one toolbar per editor
+- Custom toolbar items can access the editor through the `useLexicalComposerContext` hook

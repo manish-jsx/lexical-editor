@@ -1,0 +1,477 @@
+# LexicalEditor API Reference
+
+The `LexicalEditor` is the main component that provides rich text editing capabilities.
+
+## Import
+
+```jsx
+import { LexicalEditor } from 'lexical-editor-easy';
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `initialState` | `string` | `undefined` | JSON string of initial editor state |
+| `placeholder` | `string` | `'Enter some text...'` | Placeholder text when editor is empty |
+| `editorConfig` | `object` | `{}` | Configuration options for the Lexical editor |
+| `onChange` | `function` | `undefined` | Callback when editor content changes |
+| `className` | `string` | `''` | Additional CSS class for the editor |
+| `children` | `React.ReactNode` | `undefined` | Child components (plugins, toolbar, etc.) |
+
+## EditorConfig Object
+
+The `editorConfig` prop accepts an object with the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `namespace` | `string` | Unique identifier for the editor instance |
+| `theme` | `object` | Theme classes for editor elements |
+| `nodes` | `array` | Custom node types to register |
+| `onError` | `function` | Error handler for editor errors |
+
+## Basic Usage
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function BasicEditor() {
+  const handleEditorChange = (editorState) => {
+    console.log('Editor content changed:', editorState);
+  };
+
+  return (
+    <LexicalEditor
+      placeholder="Start typing here..."
+      onChange={handleEditorChange}
+      className="my-editor"
+    />
+  );
+}
+```
+
+## Setting Initial Content
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function EditorWithInitialContent() {
+  // This could come from an API or database
+  const initialContent = `{
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "This is pre-populated content.",
+              "type": "text",
+              "version": 1
+            }
+          ],
+          "direction": "ltr",
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1
+        }
+      ],
+      "direction": "ltr",
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1
+    }
+  }`;
+
+  return (
+    <LexicalEditor
+      initialState={initialContent}
+      placeholder="Start typing here..."
+    />
+  );
+}
+```
+
+## Custom Editor Configuration
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function CustomConfigEditor() {
+  const customEditorConfig = {
+    namespace: 'MyCustomEditor',
+    theme: {
+      paragraph: 'my-paragraph-class',
+      text: {
+        bold: 'my-bold-text',
+        italic: 'my-italic-text',
+        underline: 'my-underline-text',
+        code: 'my-code-text'
+      },
+      heading: {
+        h1: 'my-h1',
+        h2: 'my-h2',
+        h3: 'my-h3'
+      }
+    },
+    onError: (error) => {
+      console.error('Editor error:', error);
+    }
+  };
+
+  return (
+    <LexicalEditor
+      editorConfig={customEditorConfig}
+      placeholder="Start typing here..."
+    />
+  );
+}
+```
+
+## With Toolbar and Plugins
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar, NeonPersistencePlugin } from 'lexical-editor-easy';
+
+function EditorWithToolbarAndPlugins() {
+  return (
+    <LexicalEditor placeholder="Start typing here...">
+      {/* Add the toolbar */}
+      <EditorToolbar />
+      
+      {/* Add plugins */}
+      <NeonPersistencePlugin 
+        connectionString={process.env.NEON_DATABASE_URL}
+        contentId="my-document"
+      />
+    </LexicalEditor>
+  );
+}
+```
+
+## Handling Changes
+
+To access and manipulate editor state:
+
+```jsx
+import React, { useState } from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function EditorWithChangeHandling() {
+  const [currentEditorState, setCurrentEditorState] = useState(null);
+  
+  const handleEditorChange = (editorState, editor) => {
+    // Save the editor state
+    setCurrentEditorState(editorState);
+    
+    // You can also convert it to a JSON string for storage
+    const jsonString = JSON.stringify(editorState);
+    console.log('Editor state as JSON:', jsonString);
+    
+    // You can access the editor instance directly
+    console.log('Editor instance:', editor);
+  };
+  
+  return (
+    <LexicalEditor
+      placeholder="Start typing here..."
+      onChange={handleEditorChange}
+    />
+  );
+}
+```
+
+## Styling
+
+You can style the editor with CSS:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+import './editor-styles.css';
+
+function StyledEditor() {
+  return (
+    <LexicalEditor
+      className="my-custom-editor"
+      placeholder="Start typing here..."
+    />
+  );
+}
+```
+
+Example CSS (`editor-styles.css`):
+
+```css
+.my-custom-editor {
+  border: 2px solid #4a5568;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.my-custom-editor .editor-input {
+  min-height: 200px;
+  padding: 16px;
+  font-family: 'Georgia', serif;
+}
+
+.my-custom-editor .editor-placeholder {
+  color: #a0aec0;
+  font-style: italic;
+}
+```
+
+## Programmatic Control
+
+You can get a reference to the editor and control it programmatically:
+
+```jsx
+import React, { useRef } from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+import { $getRoot, $getSelection } from 'lexical';
+
+function EditorWithControls() {
+  const editorRef = useRef(null);
+  
+  const handleClearEditor = () => {
+    if (editorRef.current) {
+      editorRef.current.update(() => {
+        const root = $getRoot();
+        root.clear();
+      });
+    }
+  };
+  
+  const handleInsertText = () => {
+    if (editorRef.current) {
+      editorRef.current.update(() => {
+        const selection = $getSelection();
+        if (selection) {
+          selection.insertText('Hello, world!');
+        }
+      });
+    }
+  };
+  
+  return (
+    <div>
+      <LexicalEditor
+        ref={editorRef}
+        placeholder="Start typing here..."
+      />
+      
+      <div className="editor-controls">
+        <button onClick={handleClearEditor}>Clear</button>
+        <button onClick={handleInsertText}>Insert Text</button>
+      </div>
+    </div>
+  );
+}
+```
+
+## Read-Only Mode
+
+You can make the editor read-only by adding a custom config:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function ReadOnlyEditor() {
+  const readOnlyConfig = {
+    editable: false
+  };
+  
+  return (
+    <LexicalEditor
+      editorConfig={readOnlyConfig}
+      initialState={someContent}
+      className="read-only-editor"
+    />
+  );
+}
+```
+
+## Error Handling
+
+You can provide custom error handling:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function EditorWithErrorHandling() {
+  const errorHandlingConfig = {
+    onError: (error) => {
+      // Log to your monitoring service
+      console.error('Editor error:', error);
+      
+      // Show a user-friendly message
+      alert('Something went wrong with the editor. Your changes may not be saved.');
+    }
+  };
+  
+  return (
+    <LexicalEditor
+      editorConfig={errorHandlingConfig}
+      placeholder="Start typing here..."
+    />
+  );
+}
+```
+
+## Performance Considerations
+
+For better performance with large documents:
+
+1. Avoid frequent re-renders of parent components
+2. Use `React.memo` to memoize the editor component
+3. Avoid passing new function references on each render
+4. Consider debouncing the onChange handler
+
+```jsx
+import React, { useCallback } from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+import { debounce } from 'lexical-editor-easy';
+
+function PerformanceOptimizedEditor() {
+  // Use useCallback to avoid creating a new function on each render
+  const handleEditorChange = useCallback(
+    debounce((editorState) => {
+      // Process the editor state (e.g., save to backend)
+      console.log('Processing editor state...');
+    }, 500), // 500ms debounce delay
+    []
+  );
+  
+  return (
+    <React.memo(function EditorComponent() {
+      return (
+        <LexicalEditor
+          placeholder="Start typing here..."
+          onChange={handleEditorChange}
+        />
+      );
+    })
+  );
+}
+```
+
+## Accessibility
+
+The `LexicalEditor` component includes several accessibility features:
+
+- Proper ARIA attributes for screen readers
+- Keyboard navigation support
+- Focus management
+- Semantic HTML structure
+
+To ensure your editor implementation is accessible:
+
+1. Use semantic heading levels
+2. Maintain sufficient color contrast for text
+3. Ensure all interactive elements are keyboard accessible
+
+## Browser Support
+
+The editor is compatible with:
+
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+
+For older browsers or mobile devices, consider the following:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function EditorWithFallback() {
+  const isSupportedBrowser = () => {
+    // Simple browser feature detection
+    return typeof document.execCommand === 'function';
+  };
+  
+  return isSupportedBrowser() ? (
+    <LexicalEditor placeholder="Start typing here..." />
+  ) : (
+    <textarea 
+      placeholder="Your browser doesn't support the rich text editor. Use this simple editor instead."
+      className="fallback-editor"
+    />
+  );
+}
+```
+
+## Server-Side Rendering
+
+The editor is compatible with server-side rendering (SSR) frameworks like Next.js. However, since it's a rich text editor that requires browser APIs, it should be loaded dynamically on the client side:
+
+```jsx
+// In a Next.js component
+import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+
+// Import the editor dynamically with SSR disabled
+const LexicalEditorDynamic = dynamic(
+  () => import('lexical-editor-easy').then((mod) => mod.LexicalEditor),
+  { ssr: false }
+);
+
+function EditorPage() {
+  const [editorReady, setEditorReady] = useState(false);
+  
+  useEffect(() => {
+    setEditorReady(true);
+  }, []);
+  
+  return (
+    <div>
+      <h1>My Editor</h1>
+      {editorReady ? (
+        <LexicalEditorDynamic placeholder="Start typing..." />
+      ) : (
+        <div className="editor-placeholder-ssr">Loading editor...</div>
+      )}
+    </div>
+  );
+}
+```
+
+## Using with TypeScript
+
+The LexicalEditor component is fully typed with TypeScript:
+
+```tsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+import type { EditorState } from 'lexical';
+
+function TypedEditor() {
+  const handleEditorChange = (editorState: EditorState) => {
+    // Type-safe editor state handling
+  };
+  
+  return (
+    <LexicalEditor
+      placeholder="Type-safe editor"
+      onChange={handleEditorChange}
+    />
+  );
+}
+```
+
+## Next Steps
+
+- Learn about [integration with Vercel Blob](/integration/vercel-blob) for image handling
+- Explore [integration with Neon PostgreSQL](/integration/neon-postgres) for data persistence
+- Check out the [tutorials](/tutorials) for practical examples

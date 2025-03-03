@@ -1,0 +1,252 @@
+# Contributing to Lexical Editor Easy
+
+Thank you for your interest in contributing to Lexical Editor Easy! This guide will help you get started with the development process and explain how you can contribute to the project.
+
+## Table of Contents
+
+- [Code of Conduct](#code-of-conduct)
+- [Development Setup](#development-setup)
+- [Project Structure](#project-structure)
+- [Contribution Workflow](#contribution-workflow)
+- [Coding Standards](#coding-standards)
+- [Testing Guidelines](#testing-guidelines)
+- [Documentation](#documentation)
+- [Issue Reporting](#issue-reporting)
+- [Pull Requests](#pull-requests)
+- [Release Process](#release-process)
+
+## Code of Conduct
+
+We want to foster an inclusive and friendly community around our project. We expect everyone participating in the Lexical Editor Easy community to follow our [Code of Conduct](https://github.com/manish-jsx/lexical-editor/blob/main/CODE_OF_CONDUCT.md).
+
+## Development Setup
+
+Follow these steps to set up the project for development:
+
+### Prerequisites
+
+- Node.js (v14 or newer)
+- npm v6 or newer (or yarn)
+- Git
+
+### Installation Steps
+
+1. Fork the repository on GitHub
+2. Clone your fork locally:
+
+```bash
+git clone https://github.com/YOUR-USERNAME/lexical-editor.git
+cd lexical-editor
+```
+
+3. Install dependencies:
+
+```bash
+npm install
+```
+
+4. Set up environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` to add your Neon PostgreSQL connection string and Vercel Blob token if needed.
+
+5. Start the development server:
+
+```bash
+npm run dev
+```
+
+### Running Tests
+
+```bash
+npm test
+```
+
+### Building the Package
+
+```bash
+npm run build
+```
+
+## Project Structure
+
+The codebase is organized as follows:
+
+```
+/src
+  /components       # React components
+    LexicalEditor.tsx
+    EditorToolbar.tsx
+    ...
+  /plugins         # Editor plugins
+  /services        # Service integrations (Blob, Neon)
+  /utils           # Utility functions
+  /types           # TypeScript type definitions
+  index.ts         # Main package exports
+/examples          # Example usage
+/docs              # Documentation site
+/tests             # Test files
+```
+
+## Contribution Workflow
+
+1. **Find an issue** to work on or create a new one. Issues labeled "good first issue" are a great place to start.
+
+2. **Create a branch**:
+
+```bash
+git checkout -b feature/your-feature-name
+```
+
+Use prefixes like `feature/`, `fix/`, or `docs/` to categorize your work.
+
+3. **Make changes** and follow the coding standards.
+
+4. **Test your changes**:
+   - Run unit tests: `npm test`
+   - Run lint checks: `npm run lint`
+   - Manually test your feature
+
+5. **Commit your changes** following the [conventional commits](https://www.conventionalcommits.org/) standard:
+
+```bash
+git commit -m "feat: add image resize capability"
+# or
+git commit -m "fix: handle null selection in toolbar"
+```
+
+6. **Push to your fork**:
+
+```bash
+git push origin feature/your-feature-name
+```
+
+7. **Submit a pull request** to the main repository.
+
+## Coding Standards
+
+We follow strict standards to maintain code quality:
+
+### TypeScript
+
+- Use TypeScript for all new code
+- Include proper type definitions
+- Avoid using `any` type
+- Export interfaces for public API components
+
+### React Components
+
+- Use functional components with hooks
+- Add JSDoc comments for component props
+- Follow the single responsibility principle
+- Use React.memo for performance optimizations when appropriate
+
+### File Organization
+
+- One component per file
+- Group related components in a directory
+- Include an index.ts file in each directory to simplify imports
+
+### Naming Conventions
+
+- Use PascalCase for component names and files
+- Use camelCase for variables, functions, and methods
+- Use UPPER_SNAKE_CASE for constants
+
+### Code Formatting
+
+We use ESLint and Prettier for code formatting. Run before submitting PRs:
+
+```bash
+npm run lint
+npm run format
+```
+
+## Testing Guidelines
+
+We use Jest and React Testing Library for testing:
+
+- **Unit tests** - Test individual functions and components
+- **Integration tests** - Test interactions between components
+- **End-to-end tests** - Test full user workflows
+
+Test files should be placed alongside the component they test with a `.test.tsx` suffix.
+
+Example test structure:
+
+```typescript
+describe('ComponentName', () => {
+  it('should render correctly', () => {
+    // Test implementation
+  });
+
+  it('should handle specific interaction', () => {
+    // Test implementation
+  });
+});
+```
+
+## Documentation
+
+Good documentation is crucial for our project:
+
+- **Code comments** - Use JSDoc comments for functions and components
+- **README updates** - Update the README.md with any new features or API changes
+- **Documentation site** - Update the docs in the `/docs` directory
+- **Examples** - Add examples showing how to use new features
+
+Before submitting a PR, make sure your changes are properly documented.
+
+## Issue Reporting
+
+When creating an issue, please include:
+
+1. **Description** - Clear description of the issue
+2. **Steps to Reproduce** - Detailed steps to reproduce the issue
+3. **Expected Behavior** - What should happen
+4. **Actual Behavior** - What actually happens
+5. **Environment** - Browser, OS, package version, etc.
+6. **Screenshots** - If applicable
+7. **Possible Solution** - If you have suggestions on how to fix the issue
+
+Use the issue templates provided in the repository.
+
+## Pull Requests
+
+When submitting a PR:
+
+1. **Link to issues** - Reference any related issues
+2. **Description** - Clearly describe what your PR does
+3. **Breaking Changes** - Highlight any breaking changes
+4. **Screenshots** - Include before/after screenshots for UI changes
+5. **Tests** - Make sure your code is covered by tests
+6. **Documentation** - Update documentation if needed
+
+A maintainer will review your PR and may request changes or ask questions.
+
+## Release Process
+
+Our release process:
+
+1. We follow [semantic versioning](https://semver.org/)
+2. Changes are tested on the main branch
+3. Release candidates are created for major updates
+4. Changelog is generated from commit messages
+5. npm package is published after successful CI/CD pipeline
+
+If you're a maintainer, follow the detailed release process in the MAINTAINERS.md file.
+
+## Getting Help
+
+If you need help or have questions:
+
+- **Discord** - Join our [Discord community](https://discord.gg/example)
+- **GitHub Discussions** - Start a [discussion](https://github.com/manish-jsx/lexical-editor/discussions)
+- **Slack** - Join our [Slack workspace](https://example.slack.com)
+
+We're happy to help you contribute to the project!
+
+Thank you for your contributions to Lexical Editor Easy!

@@ -1,0 +1,8 @@
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/tutorials/cms-integration": "pages/tutorials/cms-integration.js",
+  "/tutorials/collaborative-editing": "pages/tutorials/collaborative-editing.js",
+  "/troubleshooting": "pages/troubleshooting.js"
+}

@@ -1,0 +1,73 @@
+# Features Overview
+
+Lexical Editor Easy provides a rich set of features to help you build powerful text editing experiences in your React applications. This page gives you a quick overview of all the features available.
+
+## Core Features
+
+### Rich Text Editing
+
+- **Text Formatting**: Bold, italic, underline, and more
+- **Paragraph Formatting**: Alignment, indentation, and spacing
+- **Headings**: Multiple levels of headings (H1-H6)
+- **Lists**: Ordered and unordered lists
+- **Links**: Insert and edit hyperlinks
+
+[Learn more about Rich Text Editing →](/features/rich-text)
+
+### Image Handling
+
+- **Image Uploads**: Direct uploads to Vercel Blob
+- **Image Insertion**: Place images within your content
+- **Customizable UI**: Style the image upload interface
+- **Progress Tracking**: Monitor upload progress
+
+[Learn more about Image Handling →](/features/image-handling)
+
+### Data Persistence
+
+- **Automatic Saving**: Save content as you type
+- **Content Loading**: Retrieve saved content
+- **Neon PostgreSQL Integration**: Store content in a scalable database
+- **Customizable Saving Behavior**: Control when and how content is saved
+
+[Learn more about Data Persistence →](/features/persistence)
+
+## Integration Features
+
+### Vercel Blob Storage
+
+- Upload and store images using Vercel's Blob Storage
+- Public and private access control
+- Progress tracking
+- Optimized for serverless environments
+
+[Learn more about Vercel Blob Integration →](/integration/vercel-blob)
+
+### Neon PostgreSQL
+
+- Store and retrieve editor content
+- Automatic database schema setup
+- WebSocket support for better performance
+- Document management utilities
+
+[Learn more about Neon PostgreSQL Integration →](/integration/neon-postgres)
+
+## Advanced Features
+
+- **Custom Plugins**: Create your own plugins to extend functionality
+- **Custom Nodes**: Define custom content types for your editor
+- **Theming**: Customize the appearance of the editor
+- **Collaborative Editing**: Support for real-time collaboration (coming soon)
+
+[Learn more about Advanced Features →](/features/advanced)
+
+## How Features Are Organized
+
+Lexical Editor Easy is built with a modular architecture:
+
+1. **Core Components**: The essential editor components (`LexicalEditor` and `EditorToolbar`)
+2. **Integration Services**: Services that connect to external systems (Vercel Blob, Neon PostgreSQL)
+3. **Utility Components**: Helper components that provide specific functionality (like `BlobImageUploader`)
+4. **Plugins**: Components that add features to the editor (like `NeonPersistencePlugin`)
+
+This modular approach allows you to use only the features you need, keeping your application lightweight.

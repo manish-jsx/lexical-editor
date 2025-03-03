@@ -1,0 +1,49 @@
+# Lexical Editor Easy
+
+Welcome to the official documentation for `lexical-editor-easy` - a customizable React rich text editor built on top of Meta's Lexical framework, with integrated support for Vercel Blob Storage and Neon.tech PostgreSQL.
+
+## What is Lexical Editor Easy?
+
+`lexical-editor-easy` simplifies the process of integrating a powerful rich text editor into your React applications. Built on top of Meta's [Lexical](https://lexical.dev/) editor framework, it provides an easy-to-use component with additional features:
+
+- **Simple Integration**: Add a full-featured editor with minimal configuration
+- **Vercel Blob Storage**: Built-in support for image uploads to Vercel Blob
+- **Neon PostgreSQL Integration**: Automatic content saving and retrieval with Neon.tech
+- **Customizable Interface**: Style and extend the editor to match your application
+- **Plugins System**: Enhance functionality through the plugin architecture
+
+## Quick Example
+
+Here's a quick example of how to use the Lexical Editor in your React application:
+
+```jsx
+import React from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+export default function MyEditor() {
+  return (
+    <div>
+      <h1>My Editor</h1>
+      <LexicalEditor 
+        placeholder="Start typing..."
+        onChange={(editorState) => console.log(editorState)} 
+      />
+    </div>
+  );
+}
+```
+
+## Who is this for?
+
+This library is perfect for:
+
+- React developers who need a rich text editor
+- Projects that use Vercel for hosting and storage
+- Applications that require content persistence with Neon PostgreSQL
+- Developers who want a customizable editor without building from scratch
+
+## Next Steps
+
+- Check out the [Getting Started](/getting-started) guide to install and configure the editor
+- Learn about [Features](/features) available in the editor
+- Explore [Integration Guides](/integration) for Vercel and Neon.tech

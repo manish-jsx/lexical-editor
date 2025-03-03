@@ -1,0 +1,173 @@
+# BlobImageUploader API Reference
+
+The `BlobImageUploader` component provides an easy way to upload images to Vercel Blob Storage and insert them into the Lexical Editor.
+
+## Import
+
+```jsx
+import { BlobImageUploader } from 'lexical-editor-easy';
+```
+
+## Prerequisites
+
+- Vercel Blob Storage setup in your project
+- `@vercel/blob` package installed
+- API route for handling uploads (see [Vercel Blob Integration](/integration/vercel-blob))
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `buttonText` | `string` | `'Upload Image'` | Text displayed on the upload button |
+| `className` | `string` | `undefined` | CSS class for the uploader container |
+
+## Basic Usage
+
+```jsx
+import React from 'react';
+import { LexicalEditor, EditorToolbar, BlobImageUploader } from 'lexical-editor-easy';
+
+function EditorWithImageUpload() {
+  return (
+    <LexicalEditor placeholder="Start typing here...">
+      <EditorToolbar>
+        <BlobImageUploader buttonText="Add Image" />
+      </EditorToolbar>
+    </LexicalEditor>
+  );
+}
+```
+
+## Customizing the Upload Button
+
+You can style the upload button by providing a `className`:
+
+```jsx
+import React from 'react';
+import { BlobImageUploader } from 'lexical-editor-easy';
+import './image-uploader.css';
+
+function CustomImageUploader() {
+  return (
+    <BlobImageUploader 
+      buttonText="📷 Insert Image" 
+      className="custom-image-uploader"
+    />
+  );
+}
+```
+
+Example CSS (`image-uploader.css`):
+
+```css
+.custom-image-uploader {
+  display: inline-block;
+}
+
+.custom-image-uploader span {
+  display: inline-block;
+  background-color: #ebf8ff;
+  color: #2b6cb0;
+  border: 1px solid #bee3f8;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.custom-image-uploader span:hover {
+  background-color: #bee3f8;
+}
+
+/* Styling the upload progress indicator */
+.custom-image-uploader div {
+  background-color: #ebf8ff;
+  color: #2b6cb0;
+  border: 1px solid #bee3f8;
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+```
+
+## Upload Progress
+
+The component shows an upload progress indicator during file uploads:
+
+```jsx
+Uploading: 45%
+```
+
+## File Selection
+
+The component creates a hidden file input that accepts image files:
+
+```html
+<input type="file" accept="image/*" style="display: none;" />
+```
+
+## Error Handling
+
+Upload errors are logged to the console. You can monitor these in your browser's developer tools:
+
+```
+Error handling image upload: [Error details]
+Upload failed: [Error message]
+```
+
+## Integration Notes
+
+- The component must be used within a `LexicalEditor` component context
+- It uses the Lexical Composer context to access the editor instance
+- When an image is uploaded, it's inserted at the current cursor position
+- The component uses the Vercel Blob client API for uploads
+
+## Example: Standalone Usage
+
+If you need more control, you can use the `uploadToVercelBlob` function directly:
+
+```jsx
+import React, { useState } from 'react';
+import { uploadToVercelBlob } from 'lexical-editor-easy';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { $insertNodes, $createParagraphNode } from 'lexical';
+
+function CustomImageHandler() {
+  const [editor] = useLexicalComposerContext();
+  const [isUploading, setIsUploading] = useState(false);
+  
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    
+    try {
+      const response = await uploadToVercelBlob(file, {
+        access: 'public',
+        folder: 'blog-images',
+        altText: 'My blog image'
+      });
+      
+      if (response.success && response.url) {
+        // Insert the image into the editor
+        editor.update(() => {
+          // Insert code to add image to editor
+          // This depends on how you want to represent images
+        });
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  return (
+    <div>
+      <input type="file" accept="image/*" onChange={handleFileSelect} />
+      {isUploading && <div>Uploading...</div>}
+    </div>
+  );
+}
+```

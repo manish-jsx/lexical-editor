@@ -1,0 +1,84 @@
+/* Basic styling for the Lexical Editor */
+.lexical-editor-container {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.editor-inner {
+  position: relative;
+}
+
+.editor-input {
+  min-height: 150px;
+  padding: 15px;
+  resize: none;
+  font-size: 15px;
+  caret-color: rgb(5, 5, 5);
+  position: relative;
+  tab-size: 1;
+  outline: 0;
+  line-height: 1.5;
+}
+
+.editor-placeholder {
+  color: #999;
+  overflow: hidden;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 15px;
+  left: 15px;
+  font-size: 15px;
+  user-select: none;
+  display: inline-block;
+  pointer-events: none;
+}
+
+.editor-toolbar {
+  display: flex;
+  background: #f7f8f9;
+  padding: 6px;
+  border-bottom: 1px solid #ddd;
+}
+
+.editor-toolbar button {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  margin-right: 2px;
+}
+
+.editor-toolbar button:hover {
+  background: #efefef;
+}
+
+.editor-toolbar button.active {
+  background: #dde2e8;
+  color: #0366d6;
+}
+
+.editor-text-bold {
+  font-weight: bold;
+}
+
+.editor-text-italic {
+  font-style: italic;
+}
+
+.editor-text-underline {
+  text-decoration: underline;
+}
+
+.editor-text-code {
+  font-family: monospace;
+  background-color: #f6f6f6;
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+.editor-link {
+  color: #0366d6;
+  text-decoration: underline;
+}

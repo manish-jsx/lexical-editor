@@ -1,0 +1,209 @@
+# NeonPersistencePlugin API Reference
+
+The `NeonPersistencePlugin` provides automatic saving and loading of editor content using Neon PostgreSQL database.
+
+## Import
+
+```jsx
+import { NeonPersistencePlugin } from 'lexical-editor-easy';
+```
+
+## Prerequisites
+
+- Neon PostgreSQL account and database
+- `@neondatabase/serverless` package installed
+- Database connection string
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `connectionString` | `string` | **Required** | Neon database connection string |
+| `contentId` | `string` | Auto-generated UUID | Unique ID for the content |
+| `title` | `string` | `null` | Optional title for the content entry |
+| `saveDelay` | `number` | `1000` | Milliseconds to wait before saving changes |
+| `onSave` | `function` | `undefined` | Callback when content is saved |
+| `onLoad` | `function` | `undefined` | Callback when content is loaded |
+| `onError` | `function` | `undefined` | Callback when an error occurs |
+| `useWebsockets` | `boolean` | `true` | Use WebSockets for database connection |
+
+## Basic Usage
+
+```jsx
+import React from 'react';
+import { LexicalEditor, NeonPersistencePlugin } from 'lexical-editor-easy';
+
+function EditorWithPersistence() {
+  return (
+    <LexicalEditor placeholder="Start typing here...">
+      <NeonPersistencePlugin 
+        connectionString={process.env.NEON_DATABASE_URL}
+        contentId="document-123"
+        title="My Document"
+      />
+    </LexicalEditor>
+  );
+}
+```
+
+## Auto-Saving with Feedback
+
+```jsx
+import React, { useState } from 'react';
+import { LexicalEditor, NeonPersistencePlugin } from 'lexical-editor-easy';
+
+function EditorWithSaveFeedback() {
+  const [lastSaved, setLastSaved] = useState(null);
+  
+  const handleSave = (contentId) => {
+    setLastSaved(new Date().toLocaleTimeString());
+  };
+  
+  const handleError = (error) => {
+    console.error('Save error:', error);
+    alert('Error saving your document!');
+  };
+  
+  return (
+    <div>
+      <LexicalEditor placeholder="Start typing here...">
+        <NeonPersistencePlugin 
+          connectionString={process.env.NEON_DATABASE_URL}
+          contentId="document-123"
+          title="My Document"
+          saveDelay={2000} // Wait 2 seconds after typing stops
+          onSave={handleSave}
+          onError={handleError}
+        />
+      </LexicalEditor>
+      
+      {lastSaved && (
+        <div className="save-indicator">
+          Last saved at: {lastSaved}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Loading Status
+
+```jsx
+import React, { useState } from 'react';
+import { LexicalEditor, NeonPersistencePlugin } from 'lexical-editor-easy';
+
+function EditorWithLoadingStatus() {
+  const [isLoaded, setIsLoaded] = useState(false);
+  
+  const handleLoad = (contentId) => {
+    setIsLoaded(true);
+  };
+  
+  return (
+    <div>
+      {!isLoaded && (
+        <div className="loading-indicator">
+          Loading document...
+        </div>
+      )}
+      
+      <LexicalEditor placeholder="Start typing here...">
+        <NeonPersistencePlugin 
+          connectionString={process.env.NEON_DATABASE_URL}
+          contentId="document-123"
+          onLoad={handleLoad}
+        />
+      </LexicalEditor>
+    </div>
+  );
+}
+```
+
+## How It Works
+
+The plugin:
+
+1. Creates necessary database tables on first use
+2. Loads content from the database if `contentId` is provided
+3. Automatically saves changes as you type, after the `saveDelay` timeout
+4. Provides callbacks for save, load, and error events
+
+## Database Schema
+
+The plugin uses this table structure:
+
+```sql
+CREATE TABLE IF NOT EXISTS lexical_content (
+  id TEXT PRIMARY KEY,
+  content JSONB NOT NULL,
+  title TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+## Notes and Best Practices
+
+- **Connection String Security**: Never expose your Neon database connection string in client-side code. Use environment variables and server-side handling.
+- **Content IDs**: Use meaningful IDs for your content to make it easier to manage.
+- **Error Handling**: Always provide an `onError` handler to catch and respond to issues.
+- **Save Delay**: Adjust `saveDelay` based on your needs - shorter for more frequent saves, longer to reduce database operations.
+- **WebSockets**: WebSocket connections are recommended for better performance in serverless environments like Next.js.
+
+## Customizing the Save Behavior
+
+To implement a manual save button alongside auto-saving:
+
+```jsx
+import React, { useRef } from 'react';
+import { LexicalEditor, NeonPersistencePlugin } from 'lexical-editor-easy';
+import { initNeonDatabase } from 'lexical-editor-easy';
+
+function EditorWithManualSave() {
+  const editorRef = useRef(null);
+  const documentId = "document-123";
+  
+  // Create a Neon database instance
+  const neonDb = initNeonDatabase({
+    connectionString: process.env.NEON_DATABASE_URL
+  });
+  
+  // Manual save function
+  const handleManualSave = async () => {
+    if (!editorRef.current) return;
+    
+    editorRef.current.update(async () => {
+      const editorState = editorRef.current.getEditorState();
+      const jsonState = JSON.stringify(editorState.toJSON());
+      
+      try {
+        await neonDb.saveContent(documentId, jsonState, "My Document");
+        alert("Document saved successfully!");
+      } catch (error) {
+        console.error("Save failed:", error);
+        alert("Failed to save document.");
+      }
+    });
+  };
+  
+  return (
+    <div>
+      <button onClick={handleManualSave}>
+        Save Now
+      </button>
+      
+      <LexicalEditor 
+        placeholder="Start typing here..."
+        ref={editorRef}
+      >
+        <NeonPersistencePlugin 
+          connectionString={process.env.NEON_DATABASE_URL}
+          contentId={documentId}
+          saveDelay={5000} // Longer delay for auto-save
+        />
+      </LexicalEditor>
+    </div>
+  );
+}
+```

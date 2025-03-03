@@ -1,0 +1,59 @@
+# Installation
+
+Getting started with Lexical Editor Easy is straightforward. Follow these steps to add the library to your React project.
+
+## Prerequisites
+
+- Node.js 14.x or higher
+- React 16.8.0 or higher
+- npm or yarn
+
+## Installing the Package
+
+Install the main package and its peer dependencies:
+
+```bash
+# Using npm
+npm install lexical-editor-easy lexical @lexical/react react react-dom
+
+# Using yarn
+yarn add lexical-editor-easy lexical @lexical/react
+```
+
+### Optional Dependencies
+
+For Vercel Blob storage integration (image uploads):
+
+```bash
+npm install @vercel/blob
+```
+
+For Neon PostgreSQL integration (content persistence):
+
+```bash
+npm install @neondatabase/serverless
+```
+
+## Checking Installation
+
+After installation, you can verify that everything is set up correctly by importing the editor in your project:
+
+```jsx
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function App() {
+  return (
+    <div>
+      <h1>My Editor</h1>
+      <LexicalEditor placeholder="Start typing..." />
+    </div>
+  );
+}
+```
+
+If you can see the editor rendered on your page, the installation was successful!
+
+## Next Steps
+
+- Learn about [Basic Usage](/getting-started/basic-usage)
+- Explore [Configuration Options](/getting-started/configuration)

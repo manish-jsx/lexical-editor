@@ -1,0 +1,1005 @@
+# Building a Note Taking App
+
+In this tutorial, we'll create a simple note-taking application that uses `lexical-editor-easy` for the editor and Neon PostgreSQL for storing notes.
+
+## Project Setup
+
+First, create a new React application:
+
+```bash
+npx create-react-app note-taking-app
+cd note-taking-app
+```
+
+Install the necessary dependencies:
+
+```bash
+npm install lexical-editor-easy lexical @lexical/react @neondatabase/serverless react react-dom uuid
+```
+
+## Environment Setup
+
+Create a `.env` file in the project root:
+
+```
+REACT_APP_NEON_DATABASE_URL=your_neon_connection_string
+```
+
+## Creating the Note Component
+
+Create a file at `src/components/Note.js`:
+
+```jsx
+import React from 'react';
+import { LexicalEditor, NeonPersistencePlugin } from 'lexical-editor-easy';
+
+function Note({ id, onSaved }) {
+  const handleSave = (savedId) => {
+    if (onSaved) {
+      onSaved(savedId);
+    }
+  };
+
+  return (
+    <div className="note-editor">
+      <LexicalEditor placeholder="Start typing your note...">
+        <NeonPersistencePlugin
+          connectionString={process.env.REACT_APP_NEON_DATABASE_URL}
+          contentId={id}
+          onSave={handleSave}
+          saveDelay={1000}
+        />
+      </LexicalEditor>
+    </div>
+  );
+}
+
+export default Note;
+```
+
+## Creating the Note List Component
+
+Create a file at `src/components/NoteList.js`:
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { initNeonDatabase } from 'lexical-editor-easy';
+import { v4 as uuidv4 } from 'uuid';
+
+function NoteList({ onSelectNote, selectedNoteId }) {
+  const [notes, setNotes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const neonDb = initNeonDatabase({
+    connectionString: process.env.REACT_APP_NEON_DATABASE_URL,
+    useWebsockets: true
+  });
+  
+  // Load notes on mount
+  useEffect(() => {
+    async function loadNotes() {
+      try {
+        await neonDb.setupTables();
+        const loadedNotes = await neonDb.listContent(50);
+        setNotes(loadedNotes);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading notes:', error);
+        setIsLoading(false);
+      }
+    }
+    
+    loadNotes();
+  }, []);
+  
+  const createNewNote = () => {
+    const newNoteId = uuidv4();
+    onSelectNote(newNoteId);
+  };
+  
+  const deleteNote = async (id, e) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to delete this note?')) {
+      try {
+        await neonDb.deleteContent(id);
+        setNotes(notes.filter(note => note.id !== id));
+        if (selectedNoteId === id) {
+          onSelectNote(null);
+        }
+      } catch (error) {
+        console.error('Error deleting note:', error);
+      }
+    }
+  };
+
+  const refreshNotes = async () => {
+    setIsLoading(true);
+    try {
+      const loadedNotes = await neonDb.listContent(50);
+      setNotes(loadedNotes);
+    } catch (error) {
+      console.error('Error refreshing notes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return (
+    <div className="note-list">
+      <div className="note-list-header">
+        <h2>Your Notes</h2>
+        <div className="note-actions">
+          <button onClick={refreshNotes} className="refresh-button">
+            Refresh
+          </button>
+          <button onClick={createNewNote} className="create-button">
+            New Note
+          </button>
+        </div>
+      </div>
+      
+      {isLoading ? (
+        <div className="loading">Loading notes...</div>
+      ) : (
+        <ul>
+          {notes.length === 0 ? (
+            <li className="empty-notes">No notes yet. Create your first note!</li>
+          ) : (
+            notes.map(note => {
+              // Create a preview from the content
+              let preview = "Empty note";
+              try {
+                const content = note.content;
+                if (content && content.root && content.root.children) {
+                  const firstParagraph = content.root.children.find(c => c.type === 'paragraph');
+                  if (firstParagraph && firstParagraph.children) {
+                    const textNodes = firstParagraph.children.filter(c => c.type === 'text');
+                    if (textNodes.length > 0) {
+                      preview = textNodes.map(t => t.text).join('').substring(0, 50);
+                      if (preview.length === 50) preview += '...';
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('Error parsing note content', e);
+              }
+              
+              return (
+                <li 
+                  key={note.id} 
+                  className={`note-item ${selectedNoteId === note.id ? 'selected' : ''}`}
+                  onClick={() => onSelectNote(note.id)}
+                >
+                  <div className="note-preview">
+                    <span className="note-date">
+                      {new Date(note.updated_at).toLocaleDateString()}
+                    </span>
+                    <div className="note-text">{preview}</div>
+                  </div>
+                  <button 
+                    className="delete-button"
+                    onClick={(e) => deleteNote(note.id, e)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default NoteList;
+```
+
+## Creating the Main Note App Component
+
+Create a file at `src/components/NoteApp.js`:
+
+```jsx
+import React, { useState } from 'react';
+import NoteList from './NoteList';
+import Note from './Note';
+import './NoteApp.css';
+
+function NoteApp() {
+  const [selectedNoteId, setSelectedNoteId] = useState(null);
+  
+  const handleNoteSelection = (noteId) => {
+    setSelectedNoteId(noteId);
+  };
+  
+  const handleNoteSaved = (noteId) => {
+    // Trigger a refresh or update UI if needed
+    console.log(`Note saved: ${noteId}`);
+  };
+  
+  return (
+    <div className="note-app">
+      <aside className="sidebar">
+        <NoteList 
+          onSelectNote={handleNoteSelection}
+          selectedNoteId={selectedNoteId}
+        />
+      </aside>
+      
+      <main className="note-content">
+        {selectedNoteId ? (
+          <Note 
+            id={selectedNoteId}
+            onSaved={handleNoteSaved}
+          />
+        ) : (
+          <div className="empty-state">
+            <h2>Select a note or create a new one</h2>
+            <button 
+              onClick={() => handleNoteSelection('new-note-' + Date.now())}
+              className="create-button"
+            >
+              Create New Note
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default NoteApp;
+```
+
+## Adding Styles
+
+Create a file at `src/components/NoteApp.css`:
+
+```css
+.note-app {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 300px;
+  border-right: 1px solid #e2e8f0;
+  background-color: #f7fafc;
+  overflow-y: auto;
+}
+
+.note-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.note-list {
+  padding: 15px;
+}
+
+.note-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.note-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.create-button {
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.create-button:hover {
+  background-color: #3182ce;
+}
+
+.refresh-button {
+  background-color: #e2e8f0;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.refresh-button:hover {
+  background-color: #cbd5e0;
+}
+
+.note-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.note-item {
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+}
+
+.note-item:hover {
+  background-color: #edf2f7;
+}
+
+.note-item.selected {
+  border-color: #4299e1;
+  background-color: #ebf8ff;
+}
+
+.note-preview {
+  flex: 1;
+  overflow: hidden;
+}
+
+.note-date {
+  display: block;
+  font-size: 12px;
+  color: #718096;
+  margin-bottom: 4px;
+}
+
+.note-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.delete-button {
+  opacity: 0;
+  background-color: #fed7d7;
+  color: #e53e3e;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.note-item:hover .delete-button {
+  opacity: 1;
+}
+
+.delete-button:hover {
+  background-color: #feb2b2;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #718096;
+}
+
+.empty-notes {
+  color: #718096;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+.loading {
+  padding: 20px;
+  text-align: center;
+  color: #718096;
+}
+
+.note-editor {
+  height: 100%;
+}
+```
+
+## Update the App Component
+
+Update `src/App.js`:
+
+```jsx
+import React from 'react';
+import NoteApp from './components/NoteApp';
+
+function App() {
+  return (
+    <div className="App">
+      <NoteApp />
+    </div>
+  );
+}
+
+export default App;
+```
+
+## Clean up the global styles
+
+Update `src/index.css`:
+
+```css
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+}
+```
+
+## Run the Application
+
+Start the application:
+
+```bash
+npm start
+```
+
+You now have a functioning note-taking app with:
+
+1. Rich text editing with Lexical Editor
+2. Automatic saving to Neon PostgreSQL
+3. Notes list with refresh capability
+4. Create and delete functionality
+5. Note preview with timestamps
+
+## Adding Search Functionality
+
+Let's enhance our app with a search feature. Update the `NoteList` component:
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { initNeonDatabase } from 'lexical-editor-easy';
+import { v4 as uuidv4 } from 'uuid';
+
+function NoteList({ onSelectNote, selectedNoteId }) {
+  const [notes, setNotes] = useState([]);
+  const [filteredNotes, setFilteredNotes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const neonDb = initNeonDatabase({
+    connectionString: process.env.REACT_APP_NEON_DATABASE_URL,
+    useWebsockets: true
+  });
+  
+  // Load notes on mount
+  useEffect(() => {
+    async function loadNotes() {
+      try {
+        await neonDb.setupTables();
+        const loadedNotes = await neonDb.listContent(50);
+        setNotes(loadedNotes);
+        setFilteredNotes(loadedNotes);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading notes:', error);
+        setIsLoading(false);
+      }
+    }
+    
+    loadNotes();
+  }, []);
+  
+  // Filter notes when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredNotes(notes);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = notes.filter(note => {
+        // Check title if available
+        if (note.title && note.title.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Check content
+        try {
+          const content = note.content;
+          if (content && content.root && content.root.children) {
+            for (const block of content.root.children) {
+              if (block.children) {
+                const textNodes = block.children.filter(c => c.type === 'text');
+                for (const textNode of textNodes) {
+                  if (textNode.text && textNode.text.toLowerCase().includes(query)) {
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing note content for search', e);
+        }
+        
+        return false;
+      });
+      
+      setFilteredNotes(filtered);
+    }
+  }, [searchQuery, notes]);
+  
+  const createNewNote = () => {
+    const newNoteId = uuidv4();
+    onSelectNote(newNoteId);
+  };
+  
+  const deleteNote = async (id, e) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to delete this note?')) {
+      try {
+        await neonDb.deleteContent(id);
+        const updatedNotes = notes.filter(note => note.id !== id);
+        setNotes(updatedNotes);
+        setFilteredNotes(updatedNotes.filter(note => filteredNotes.includes(note)));
+        
+        if (selectedNoteId === id) {
+          onSelectNote(null);
+        }
+      } catch (error) {
+        console.error('Error deleting note:', error);
+      }
+    }
+  };
+
+  const refreshNotes = async () => {
+    setIsLoading(true);
+    try {
+      const loadedNotes = await neonDb.listContent(50);
+      setNotes(loadedNotes);
+      setFilteredNotes(loadedNotes);
+    } catch (error) {
+      console.error('Error refreshing notes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return (
+    <div className="note-list">
+      <div className="note-list-header">
+        <h2>Your Notes</h2>
+        <div className="note-actions">
+          <button onClick={refreshNotes} className="refresh-button">
+            Refresh
+          </button>
+          <button onClick={createNewNote} className="create-button">
+            New Note
+          </button>
+        </div>
+      </div>
+      
+      <div className="search-container">
+        <input
+          type="text"
+          placeholder="Search notes..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="search-input"
+        />
+      </div>
+      
+      {isLoading ? (
+        <div className="loading">Loading notes...</div>
+      ) : (
+        <ul>
+          {filteredNotes.length === 0 ? (
+            <li className="empty-notes">
+              {notes.length === 0 
+                ? "No notes yet. Create your first note!" 
+                : "No notes match your search."}
+            </li>
+          ) : (
+            filteredNotes.map(note => {
+              // Create a preview from the content
+              let preview = "Empty note";
+              try {
+                const content = note.content;
+                if (content && content.root && content.root.children) {
+                  const firstParagraph = content.root.children.find(c => c.type === 'paragraph');
+                  if (firstParagraph && firstParagraph.children) {
+                    const textNodes = firstParagraph.children.filter(c => c.type === 'text');
+                    if (textNodes.length > 0) {
+                      preview = textNodes.map(t => t.text).join('').substring(0, 50);
+                      if (preview.length === 50) preview += '...';
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('Error parsing note content', e);
+              }
+              
+              return (
+                <li 
+                  key={note.id} 
+                  className={`note-item ${selectedNoteId === note.id ? 'selected' : ''}`}
+                  onClick={() => onSelectNote(note.id)}
+                >
+                  <div className="note-preview">
+                    <span className="note-date">
+                      {new Date(note.updated_at).toLocaleDateString()}
+                    </span>
+                    <div className="note-text">{preview}</div>
+                  </div>
+                  <button 
+                    className="delete-button"
+                    onClick={(e) => deleteNote(note.id, e)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default NoteList;
+```
+
+Add styles for the search input in `NoteApp.css`:
+
+```css
+.search-container {
+  margin-bottom: 15px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 1px #4299e1;
+}
+```
+
+## Adding Note Categories
+
+Let's add the ability to categorize notes. First, update the database service to handle categories:
+
+```jsx
+// src/services/noteService.js
+import { initNeonDatabase } from 'lexical-editor-easy';
+
+export const initNoteService = (connectionString) => {
+  const neonDb = initNeonDatabase({
+    connectionString,
+    useWebsockets: true
+  });
+  
+  return {
+    ...neonDb,  // Include all original methods
+    
+    // Add or update a note with category
+    async saveNoteWithCategory(id, content, title, category) {
+      // We'll use the title field to store a JSON object with title and category
+      const metadata = JSON.stringify({
+        title: title || '',
+        category: category || 'uncategorized'
+      });
+      
+      return await neonDb.saveContent(id, content, metadata);
+    },
+    
+    // Parse the metadata from the title field
+    parseNoteMetadata(note) {
+      try {
+        if (note.title && typeof note.title === 'string') {
+          const metadata = JSON.parse(note.title);
+          return {
+            ...note,
+            title: metadata.title,
+            category: metadata.category || 'uncategorized'
+          };
+        }
+      } catch (e) {
+        // Handle legacy notes without metadata
+      }
+      
+      return {
+        ...note,
+        title: note.title || '',
+        category: 'uncategorized'
+      };
+    },
+    
+    // Get all notes with parsed metadata
+    async getNotesWithMetadata() {
+      const notes = await neonDb.listContent(100);
+      return notes.map(note => this.parseNoteMetadata(note));
+    }
+  };
+};
+```
+
+Now let's modify our components to use these new features:
+
+```jsx
+// src/components/Note.js - with category support
+import React, { useState, useEffect } from 'react';
+import { LexicalEditor } from 'lexical-editor-easy';
+
+function Note({ id, noteService, onSaved, initialCategory = 'uncategorized' }) {
+  const [content, setContent] = useState(null);
+  const [category, setCategory] = useState(initialCategory);
+  
+  useEffect(() => {
+    // Load note if it exists
+    if (id && noteService) {
+      noteService.loadContent(id).then(data => {
+        if (data) {
+          const metadata = noteService.parseNoteMetadata(data);
+          setCategory(metadata.category);
+        }
+      }).catch(err => console.error('Error loading note:', err));
+    }
+  }, [id, noteService]);
+  
+  const handleEditorChange = (editorState) => {
+    setContent(JSON.stringify(editorState));
+  };
+  
+  const handleSave = async () => {
+    if (!content) return;
+    
+    try {
+      await noteService.saveNoteWithCategory(
+        id,
+        content,
+        '', // We're not using title directly
+        category
+      );
+      
+      if (onSaved) {
+        onSaved(id, category);
+      }
+    } catch (error) {
+      console.error('Error saving note:', error);
+    }
+  };
+  
+  const categoryOptions = [
+    'uncategorized',
+    'work',
+    'personal',
+    'ideas',
+    'tasks'
+  ];
+  
+  return (
+    <div className="note-editor">
+      <div className="note-toolbar">
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="category-select"
+        >
+          {categoryOptions.map(cat => (
+            <option key={cat} value={cat}>
+              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            </option>
+          ))}
+        </select>
+        
+        <button onClick={handleSave} className="save-button">
+          Save Note
+        </button>
+      </div>
+      
+      <LexicalEditor
+        placeholder="Start typing your note..."
+        onChange={handleEditorChange}
+      />
+    </div>
+  );
+}
+
+export default Note;
+```
+
+Now let's enhance the NoteList to support categories:
+
+```jsx
+// Enhancements to NoteList component
+// ...existing imports...
+
+function NoteList({ onSelectNote, selectedNoteId }) {
+  // ...existing state...
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [noteService] = useState(() => 
+    initNoteService(process.env.REACT_APP_NEON_DATABASE_URL)
+  );
+  
+  // Load notes on mount
+  useEffect(() => {
+    async function loadNotes() {
+      try {
+        await noteService.setupTables();
+        const loadedNotes = await noteService.getNotesWithMetadata();
+        setNotes(loadedNotes);
+        setFilteredNotes(loadedNotes);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading notes:', error);
+        setIsLoading(false);
+      }
+    }
+    
+    loadNotes();
+  }, [noteService]);
+  
+  // Filter notes when search query or category changes
+  useEffect(() => {
+    let filtered = notes;
+    
+    // Filter by category first
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(note => note.category === selectedCategory);
+    }
+    
+    // Then filter by search query
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(note => {
+        // Check if title includes query
+        if (note.title && note.title.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Check if content includes query
+        // ...existing content search logic...
+      });
+    }
+    
+    setFilteredNotes(filtered);
+  }, [searchQuery, selectedCategory, notes]);
+  
+  // Get unique categories from notes
+  const categories = ['all', ...new Set(notes.map(note => note.category))];
+  
+  return (
+    <div className="note-list">
+      {/* ...existing header... */}
+      
+      <div className="filter-controls">
+        <div className="category-filter">
+          <label>Category:</label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="category-select"
+          >
+            {categories.map(category => (
+              <option key={category} value={category}>
+                {category === 'all' 
+                  ? 'All Categories' 
+                  : category.charAt(0).toUpperCase() + category.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="search-container">
+          <input
+            type="text"
+            placeholder="Search notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+        </div>
+      </div>
+      
+      {/* ...existing note list rendering... */}
+    </div>
+  );
+}
+```
+
+Add these styles to `NoteApp.css`:
+
+```css
+.note-toolbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.category-select {
+  padding: 5px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.save-button {
+  background-color: #38b2ac;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.save-button:hover {
+  background-color: #319795;
+}
+
+.filter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-filter label {
+  font-size: 14px;
+  color: #718096;
+}
+
+.note-item .category-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background-color: #e2e8f0;
+  margin-right: 5px;
+}
+
+.category-tag.work { background-color: #bee3f8; }
+.category-tag.personal { background-color: #fefcbf; }
+.category-tag.ideas { background-color: #c6f6d5; }
+.category-tag.tasks { background-color: #fed7d7; }
+```
+
+## Next Steps
+
+To enhance your note-taking app further, you could add:
+
+1. User authentication for multiple users
+2. Note sharing capabilities
+3. Markdown export/import
+4. Dark mode toggle
+5. Mobile-responsive design
+6. Note templates
+7. Reminders and notifications
+
+This tutorial demonstrates how quickly you can build a useful application using lexical-editor-easy with Neon PostgreSQL integration.

@@ -1,0 +1,460 @@
+# Building a Simple Blog Editor
+
+In this tutorial, we'll create a complete blog post editor with image uploads and content persistence. This example integrates both Vercel Blob Storage and Neon PostgreSQL.
+
+## Project Setup
+
+First, create a new React application:
+
+```bash
+npx create-react-app blog-editor
+cd blog-editor
+```
+
+Install the necessary dependencies:
+
+```bash
+npm install lexical-editor-easy lexical @lexical/react @vercel/blob @neondatabase/serverless react react-dom
+```
+
+## Environment Configuration
+
+Create a `.env` file in your project root:
+
+```
+REACT_APP_NEON_DATABASE_URL=your_neon_connection_string
+REACT_APP_BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
+```
+
+## Setting Up API Routes
+
+Create a file at `src/api/upload-blob.js` to handle image uploads:
+
+```javascript
+import { put } from '@vercel/blob';
+import { v4 as uuidv4 } from 'uuid';
+
+export async function handleBlobUpload(file) {
+  if (!file) {
+    throw new Error('No file provided');
+  }
+
+  // Generate a unique filename
+  const uniqueFilename = `${uuidv4()}-${file.name}`;
+
+  try {
+    const response = await put(uniqueFilename, file, {
+      access: 'public',
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Error uploading to blob:', error);
+    throw error;
+  }
+}
+```
+
+## Creating the Blog Editor Component
+
+Create a file at `src/components/BlogEditor.js`:
+
+```jsx
+import React, { useState } from 'react';
+import { 
+  LexicalEditor, 
+  EditorToolbar, 
+  BlobImageUploader,
+  NeonPersistencePlugin
+} from 'lexical-editor-easy';
+
+export default function BlogEditor({ postId }) {
+  const [title, setTitle] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
+  
+  const handleSave = (id) => {
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+  };
+  
+  return (
+    <div className="blog-editor">
+      <div className="editor-header">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Post title..."
+          className="title-input"
+        />
+      </div>
+      
+      <LexicalEditor placeholder="Write your blog post...">
+        <EditorToolbar>
+          <BlobImageUploader buttonText="Add Image" />
+        </EditorToolbar>
+        
+        <NeonPersistencePlugin 
+          connectionString={process.env.REACT_APP_NEON_DATABASE_URL}
+          contentId={postId || 'new-post'}
+          title={title}
+          onSave={handleSave}
+          saveDelay={2000}
+        />
+      </LexicalEditor>
+      
+      {isSaved && <div className="save-indicator">Content saved!</div>}
+    </div>
+  );
+}
+```
+
+## Styling the Blog Editor
+
+Create a file at `src/components/BlogEditor.css`:
+
+```css
+.blog-editor {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.editor-header {
+  margin-bottom: 20px;
+}
+
+.title-input {
+  width: 100%;
+  padding: 10px;
+  font-size: 24px;
+  border: none;
+  border-bottom: 2px solid #e2e8f0;
+  outline: none;
+}
+
+.title-input:focus {
+  border-bottom-color: #4299e1;
+}
+
+.save-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #48bb78;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  animation: fadeIn 0.3s, fadeOut 0.3s 1.7s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+```
+
+## Creating the Blog Post Manager
+
+Create a file at `src/components/BlogPostManager.js`:
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { initNeonDatabase } from 'lexical-editor-easy';
+import BlogEditor from './BlogEditor';
+import './BlogEditor.css';
+
+export default function BlogPostManager() {
+  const [posts, setPosts] = useState([]);
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Initialize Neon Database
+  const neonDb = initNeonDatabase({
+    connectionString: process.env.REACT_APP_NEON_DATABASE_URL,
+    useWebsockets: true
+  });
+  
+  // Load posts on mount
+  useEffect(() => {
+    async function loadPosts() {
+      try {
+        await neonDb.setupTables();
+        const loadedPosts = await neonDb.listContent(100);
+        setPosts(loadedPosts);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading posts:', error);
+        setIsLoading(false);
+      }
+    }
+    
+    loadPosts();
+  }, []);
+  
+  const createNewPost = () => {
+    setSelectedPostId('new-post-' + Date.now());
+  };
+  
+  const deletePost = async (id) => {
+    if (window.confirm('Are you sure you want to delete this post?')) {
+      try {
+        await neonDb.deleteContent(id);
+        setPosts(posts.filter(post => post.id !== id));
+        if (selectedPostId === id) {
+          setSelectedPostId(null);
+        }
+      } catch (error) {
+        console.error('Error deleting post:', error);
+      }
+    }
+  };
+  
+  return (
+    <div className="blog-post-manager">
+      <div className="sidebar">
+        <h2>Your Blog Posts</h2>
+        <button className="new-post-button" onClick={createNewPost}>
+          Create New Post
+        </button>
+        
+        {isLoading ? (
+          <p>Loading posts...</p>
+        ) : (
+          <ul className="post-list">
+            {posts.length === 0 ? (
+              <li className="empty-state">No posts yet. Create one!</li>
+            ) : (
+              posts.map(post => (
+                <li key={post.id} className="post-item">
+                  <button
+                    className={`post-link ${selectedPostId === post.id ? 'active' : ''}`}
+                    onClick={() => setSelectedPostId(post.id)}
+                  >
+                    {post.title || 'Untitled Post'}
+                    <span className="post-date">
+                      {new Date(post.updated_at).toLocaleString()}
+                    </span>
+                  </button>
+                  <button 
+                    className="delete-button"
+                    onClick={() => deletePost(post.id)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+      </div>
+      
+      <div className="content">
+        {selectedPostId ? (
+          <BlogEditor postId={selectedPostId} />
+        ) : (
+          <div className="empty-state-container">
+            <h2>Select a post or create a new one</h2>
+            <button className="new-post-button" onClick={createNewPost}>
+              Create New Post
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+## Final App Component
+
+Update your `src/App.js` file:
+
+```jsx
+import React from 'react';
+import BlogPostManager from './components/BlogPostManager';
+import './App.css';
+
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Blog Post Editor</h1>
+      </header>
+      <main>
+        <BlogPostManager />
+      </main>
+      <footer>
+        <p>Powered by lexical-editor-easy</p>
+      </footer>
+    </div>
+  );
+}
+
+export default App;
+```
+
+## Add Some Final Styling
+
+Update or create `src/App.css`:
+
+```css
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.App-header {
+  background-color: #4299e1;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+main {
+  flex: 1;
+  display: flex;
+}
+
+footer {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  text-align: center;
+  color: #718096;
+}
+
+.blog-post-manager {
+  display: flex;
+  width: 100%;
+}
+
+.sidebar {
+  width: 300px;
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.content {
+  flex: 1;
+}
+
+.post-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+
+.post-item {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.post-link {
+  flex: 1;
+  text-align: left;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: block;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.post-link:hover {
+  background-color: #edf2f7;
+}
+
+.post-link.active {
+  background-color: #bee3f8;
+}
+
+.post-date {
+  display: block;
+  font-size: 12px;
+  color: #718096;
+}
+
+.delete-button {
+  background-color: #feb2b2;
+  color: #c53030;
+  border: none;
+  border-radius: 4px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #fc8181;
+}
+
+.new-post-button {
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.new-post-button:hover {
+  background-color: #3182ce;
+}
+
+.empty-state {
+  color: #718096;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;
+  color: #718096;
+}
+
+.empty-state-container .new-post-button {
+  max-width: 200px;
+  margin-top: 20px;
+}
+```
+
+## Run the Application
+
+Now you can start your application:
+
+```bash
+npm start
+```
+
+You should have a fully functional blog post editor with:
+
+1. Rich text editing capabilities
+2. Image uploads via Vercel Blob
+3. Automatic content persistence with Neon PostgreSQL
+4. Post management (create, list, select, delete)
+
+## Next Steps
+
+To enhance your blog editor, consider adding:
+
+1. User authentication to protect posts
+2. Published vs. draft status
+3. Categories and tags
+4. SEO metadata fields
+5. Preview functionality
+
+This tutorial demonstrates how lexical-editor-easy simplifies building rich content editing experiences with integrated storage solutions.
