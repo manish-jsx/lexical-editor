@@ -1,71 +1,113 @@
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
+import babel from '@rollup/plugin-babel';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import postcss from 'rollup-plugin-postcss';
-import babel from '@rollup/plugin-babel';
+import { terser } from 'rollup-plugin-terser';
+import pkg from './package.json';
 
-const packageJson = require('./package.json');
-
-export default {
-  input: 'src/index.ts',
-  output: [
-    {
-      file: packageJson.main,
-      format: 'cjs',
-      sourcemap: true,
-    },
-    {
-      file: packageJson.module,
+export default [
+  {
+    input: 'src/index.ts',
+    output: [
+      {
+        file: pkg.main,
+        format: 'cjs',
+        sourcemap: true,
+      },
+      {
+        file: pkg.module,
+        format: 'esm',
+        sourcemap: true,
+      },
+      {
+        file: 'dist/index.browser.js',
+        format: 'umd',
+        name: 'LexicalEditorEasy',
+        globals: {
+          react: 'React',
+          'react-dom': 'ReactDOM',
+          lexical: 'Lexical',
+          '@lexical/react': 'LexicalReact',
+        },
+        sourcemap: true,
+      },
+    ],
+    plugins: [
+      peerDepsExternal(),
+      resolve({
+        browser: true,
+        preferBuiltins: true,
+      }),
+      commonjs(),
+      typescript({ tsconfig: './tsconfig.json' }),
+      babel({
+        exclude: 'node_modules/**',
+        babelHelpers: 'runtime',
+        presets: [
+          '@babel/preset-env',
+          '@babel/preset-react',
+          '@babel/preset-typescript',
+        ],
+        plugins: ['@babel/plugin-transform-runtime'],
+      }),
+      postcss(),
+      terser(),
+    ],
+    external: [
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.peerDependencies || {}),
+      '@babel/runtime',
+    ],
+  },
+  // Browser-only bundle
+  {
+    input: 'src/index.browser.ts',
+    output: {
+      file: 'dist/index.browser.esm.js',
       format: 'esm',
       sourcemap: true,
     },
-  ],
-  plugins: [
-    peerDepsExternal(),
-    resolve({
-      extensions: ['.js', '.jsx', '.ts', '.tsx']
-    }),
-    commonjs(),
-    babel({
-      babelHelpers: 'runtime',
-      exclude: 'node_modules/**',
-      extensions: ['.js', '.jsx', '.ts', '.tsx'],
-    }),
-    typescript({ 
-      tsconfig: './tsconfig.json',
-      sourceMap: true,
-      inlineSources: true,
-      declaration: true,
-      declarationDir: 'dist',
-      exclude: [
-        '**/*.test.ts',
-        '**/*.test.tsx',
-        'node_modules',
-        'src/App.tsx',
-        'src/Components/**/*',
-        'src/constants/**/*',
-        'src/nodes/**/*',
-        'src/Plugins/**/*',
-        'src/api/**/*',
-        'src/examples/**/*'
-      ]
-    }),
-    postcss({
-      extensions: ['.css', '.scss'],
-      minimize: true,
-      inject: {
-        insertAt: 'top',
-      },
-      extract: false,
-    }),
-  ],
-  external: [
-    'react', 
-    'react-dom', 
-    'lexical', 
-    '@lexical/react',
-    '@vercel/blob',
-    '@neondatabase/serverless'
-  ]
-};
+    plugins: [
+      peerDepsExternal(),
+      resolve({
+        browser: true,
+        preferBuiltins: false, // Prefer the browser implementations
+      }),
+      commonjs(),
+      typescript({ 
+        tsconfig: './tsconfig.json',
+        compilerOptions: {
+          jsx: 'react-jsx',
+        },
+      }),
+      babel({
+        exclude: 'node_modules/**',
+        babelHelpers: 'runtime',
+        presets: [
+          '@babel/preset-env',
+          '@babel/preset-react',
+          '@babel/preset-typescript',
+        ],
+        plugins: ['@babel/plugin-transform-runtime'],
+      }),
+      postcss(),
+      terser(),
+    ],
+    external: [
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.peerDependencies || {}),
+      '@babel/runtime',
+      'fs',
+      'net',
+      'tls',
+      'crypto',
+      'stream',
+      'stream/web',
+      'util',
+      'buffer',
+      'path',
+    ],
+  }
+];

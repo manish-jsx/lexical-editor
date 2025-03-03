@@ -1,6 +1,15 @@
-# Lexical Editor
+# Lexical Editor Easy
 
-A customizable, reusable React component built on top of Meta's Lexical editor framework, with Vercel Blob Storage and Neon.tech PostgreSQL integration.
+A customizable Lexical editor component with Next.js, Vercel Blob and Neon.tech PostgreSQL support.
+
+## Features
+
+- ✅ Works with React and Next.js projects (v13+)
+- ✅ Built-in Vercel Blob storage integration for images
+- ✅ Neon PostgreSQL database support for content persistence
+- ✅ Customizable toolbar with rich text formatting options
+- ✅ Server and client components support for Next.js
+- ✅ Security audited dependencies
 
 ## Installation
 
@@ -10,156 +19,141 @@ npm install lexical-editor-easy
 yarn add lexical-editor-easy
 ```
 
-## Usage
+## Environment Variables
+
+Create a `.env.local` file (Next.js) or `.env` file (React) with the following variables:
+
+```
+# Vercel Blob Storage Configuration
+BLOB_READ_WRITE_TOKEN=your_token_here
+NEXT_PUBLIC_BLOB_BASE_URL=your_blob_base_url
+
+# Neon Database Configuration
+NEON_DATABASE_URL=postgres://user:password@host/database
+
+# Editor Configuration
+NEXT_PUBLIC_EDITOR_SAVE_INTERVAL=2000
+```
+
+## Usage with Next.js
+
+### Client Component Example
 
 ```jsx
-import React from 'react';
-import { LexicalEditor, EditorToolbar } from 'lexical-editor-easy';
+'use client';
 
-function MyComponent() {
+import { NextEditor } from 'lexical-editor-easy';
+
+export default function EditorPage() {
+  const handleSave = async (content) => {
+    const response = await fetch('/api/editor/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        id: 'my-document-id', 
+        content 
+      }),
+    });
+    
+    return response.json();
+  };
+
   return (
-    <div>
-      <h1>My Editor</h1>
-      <LexicalEditor 
-        placeholder="Enter some text..."
-        onChange={(editorState) => console.log(editorState)}
+    <div className="editor-container">
+      <h1>My Rich Text Editor</h1>
+      <NextEditor
+        editorId="my-document-id"
+        onSave={handleSave}
+        toolbarOptions={{
+          blockType: true,
+          align: true,
+          fontSize: true,
+          fontColor: true,
+          highlights: true,
+          image: true
+        }}
       />
     </div>
   );
 }
-
-export default MyComponent;
 ```
 
-## Features
-
-- Rich text editing capabilities
-- Customizable toolbar
-- Support for plugins
-- Markdown support
-- Vercel Blob Storage integration for images
-- Neon.tech PostgreSQL integration for content persistence
-- And more!
-
-## Vercel Blob Storage Integration
-
-Upload images directly to Vercel Blob storage:
-
-```jsx
-import { BlobImageUploader } from 'lexical-editor-easy';
-
-function MyEditor() {
-  return (
-    <div>
-      <EditorToolbar>
-        {/* ...other toolbar items */}
-        <BlobImageUploader buttonText="Add Image" />
-      </EditorToolbar>
-      <LexicalEditor />
-    </div>
-  );
-}
-```
-
-For API routes, create a file at `/api/upload-blob.js`:
+### API Route for Saving Content
 
 ```js
-import { put } from '@vercel/blob';
+// app/api/editor/save/route.js
+import { createNeonClient } from 'lexical-editor-easy';
+import { NextResponse } from 'next/server';
 
-export default async function handler(request, response) {
-  const blob = await put(request.query.filename, request.body, {
-    access: 'public',
+export async function POST(request) {
+  const { id, content } = await request.json();
+  const neonClient = createNeonClient();
+  
+  await neonClient.initializeEditorTable();
+  const result = await neonClient.saveEditorContent(id, content);
+  
+  return NextResponse.json({
+    success: true,
+    id: result[0].id,
+    updatedAt: result[0].updated_at
   });
-  return response.status(200).json(blob);
 }
 ```
 
-## Neon.tech PostgreSQL Integration
+### API Route for Blob Image Upload
 
-Automatically save and load editor content with Neon.tech PostgreSQL:
+```js
+// app/api/upload/route.js
+import { BlobStorageClient } from 'lexical-editor-easy';
+import { NextResponse } from 'next/server';
 
-```jsx
-import { NeonPersistencePlugin } from 'lexical-editor-easy';
-
-function MyEditor() {
-  return (
-    <div>
-      <LexicalEditor>
-        <NeonPersistencePlugin 
-          connectionString={process.env.NEON_DATABASE_URL}
-          contentId="my-document-id"
-          title="My Document"
-          onSave={(id) => console.log('Saved:', id)}
-        />
-      </LexicalEditor>
-    </div>
-  );
+export async function POST(request) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file');
+    
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No file provided' },
+        { status: 400 }
+      );
+    }
+    
+    const blobClient = new BlobStorageClient();
+    const result = await blobClient.uploadImage(file);
+    
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to upload file' },
+      { status: 500 }
+    );
+  }
 }
 ```
 
-For more advanced usage with the Neon database service:
+## Configuration Options
 
-```jsx
-import { initNeonDatabase } from 'lexical-editor-easy';
+### NextEditor Props
 
-// Initialize the database service
-const neonDb = initNeonDatabase({
-  connectionString: process.env.NEON_DATABASE_URL,
-  useWebsockets: true
-});
+| Prop | Type | Description |
+|------|------|-------------|
+| `editorId` | string | Unique identifier for this editor instance |
+| `initialContent` | object | Initial editor content state |
+| `onSave` | function | Callback for saving content (receives content object) |
+| `blobToken` | string | Optional token for client-side Blob uploads |
+| `editable` | boolean | Whether the editor is editable |
+| `toolbarOptions` | object | Configuration for which toolbar items to display |
 
-// In your component
-async function loadDocuments() {
-  // Get list of saved documents
-  const documents = await neonDb.listContent();
-  
-  // Load specific document
-  const doc = await neonDb.loadContent('document-id');
-  
-  // Other operations available: saveContent, deleteContent
-}
-```
+## Contributing
 
-## API Reference
-
-### LexicalEditor
-
-Main editor component.
-
-Props:
-- `placeholder`: String to display when editor is empty
-- `onChange`: Callback function that receives the current editor state
-- `config`: Additional editor configuration options
-- `plugins`: Array of plugins to enable
-
-### EditorToolbar
-
-Editor toolbar component for formatting.
-
-Props:
-- `editor`: Reference to the editor instance
-
-### BlobImageUploader
-
-Component for uploading images to Vercel Blob Storage.
-
-Props:
-- `buttonText`: Text to display on the upload button
-- `className`: Optional CSS class name
-
-### NeonPersistencePlugin
-
-Plugin for automatic content persistence with Neon PostgreSQL.
-
-Props:
-- `connectionString`: Neon database connection string
-- `contentId`: Optional unique ID for the content
-- `title`: Optional title for the content
-- `saveDelay`: Delay in ms before saving changes (default: 1000)
-- `onSave`: Callback when content is saved
-- `onLoad`: Callback when content is loaded
-- `onError`: Callback when an error occurs
-
-## License
-
-MIT
+Contributions are welcome! Please feel free to submit a Pull Request.
